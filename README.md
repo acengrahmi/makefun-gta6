@@ -6,10 +6,14 @@
 
 # Costa Verde — an open-world crime game
 
-Rico Santana just rolled into **Costa Verde** with an empty wallet and a
-reputation to build. Fixer Lena Cruz has work for him — if he can drive, steal
-and shoot his way through it. The whole sun-soaked city is yours: steal any
-car, run missions, dodge the cops, and get rich.
+**Seven jobs. One sunset. Every cop in the city.**
+
+Rico Santana rolls into **Costa Verde** at golden hour with an empty wallet
+and a reputation to build. Fixer **Lena Cruz**, garage boss **Sal Bianchi**,
+boat captain **Mateo Reyes** and one cop who shouldn't be helping him have
+seven jobs that will make him rich — or busted. Steal any car, run the jobs,
+and when the third wanted star lights up, watch the sky: the police
+helicopter is coming, and its searchlight does not let go.
 
 An original game: its own city, characters, vehicles, names, story, art, sound
 and music. Nothing is copied from any commercial game. It runs fully offline
@@ -36,15 +40,26 @@ static file server and open `game/index.html`.)
 
 ## The city
 
-- **Missions & story** — four jobs for Lena Cruz: meet her at the Sunset Club,
-  steal a Comet GT from the Marina, take down the Vipers at their warehouse,
-  and one timed run across the whole city with the cops on your tail.
-- **Wanted system** — crimes raise your stars; PD cruisers chase and ram you,
-  cops on foot grab you. Get busted and you lose 10% of your cash at the hospital.
-- **Traffic & pedestrians** — cars drive the grid, people stroll the sidewalks
-  and flee from gunfire. Cash bundles are hidden around the city.
-- **HUD** — money, health, wanted stars, mission objective with distance,
-  speedometer, and a live minimap.
+- **Golden hour, always** — the whole game is lit by a low western sun:
+  gradient sunset sky, warm haze, long shadows, and windows lighting up as
+  dusk settles over the grid.
+- **Seven story jobs** — a full campaign with dialogue: meet Lena at the
+  Sunset Club, steal the Comet GT, run cargo for Captain Mateo at the Marina,
+  settle the Vipers' score, follow an undercover cop's tip, pull the Big
+  Score on a timer, and survive the Sunset Showdown. Every job opens with
+  the characters talking, and the HUD counts them — *JOB 3/7*.
+- **Wanted system** — crimes raise your stars; PD cruisers chase and ram
+  you, cops on foot grab you, and from **three stars a police helicopter**
+  tracks you from the air with a sweeping searchlight (a second unit joins
+  at five stars). Get busted and you lose 10% of your cash at the hospital.
+- **Chase camera** — the driving camera leans into turns and its field of
+  view stretches with speed; engine pitch climbs with the revs.
+- **The waterfront** — a beach with umbrellas and crowds, a boardwalk,
+  marina piers and bobbing sailboats, palm-lined boulevards, and six kinds
+  of stealable vehicles (sedans, sports cars, taxis, vans, convertibles —
+  and a pickup) in traffic that drives the whole grid.
+- **HUD** — money, health, wanted stars, story dialogue, mission objective
+  with distance, speedometer, and a live minimap (helicopters included).
 - **Sound** — engine, sirens, gunshots and a sunset-drive groove, all
   synthesized live with WebAudio. No audio files.
 - **Save** — progress autosaves after every mission; continue from the menu.

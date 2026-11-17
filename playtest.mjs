@@ -75,6 +75,14 @@ async function main() {
   await evalJs(`window.__game.startGame(null)`);
   await step(1);
   check('mission 1 starts', (await evalJs(`window.__game.missions.active && window.__game.missions.current.id`)) === 'm1');
+  check('seven story jobs in the campaign', (await evalJs(`window.__game.missions.total`)) === 7,
+    `total=${await evalJs(`window.__game.missions.total`)}`);
+  const dlg = await evalJs(`document.getElementById('dialogueWho').textContent + '|' + document.getElementById('dialogue').style.display`);
+  // Lines advance on a wall-clock timer, so under a slow renderer any of the
+  // intro's speakers may be on screen — what matters is the box is up with a
+  // named story character talking.
+  check('story dialogue opens mission 1 (Lena Cruz)', !!dlg && (dlg.includes('LENA') || dlg.includes('RICO')) && dlg.includes('block'), JSON.stringify(dlg));
+  check('story giver NPC waits at the marker', (await evalJs(`!!window.__game.missions.giver`)) === true);
 
   // walk forward with W
   const p0 = await evalJs(`({ x: window.__game.player.x, z: window.__game.player.z })`);
@@ -149,11 +157,13 @@ async function main() {
   check('gang shoots back (player takes damage)', (await evalJs(`window.__game.player.health`)) < 100,
     `health=${await evalJs(`window.__game.player.health`)}`);
 
-  // police: 3 stars brings cruisers
+  // police: 3 stars brings cruisers — and the helicopter
   await evalJs(`window.__game.police.addCrime(3)`);
   await step(8);
   const wanted = await evalJs(`({ w: window.__game.police.wanted, n: window.__game.police.cruisers.length })`);
   check('wanted 3+ spawns police cruisers', wanted.w >= 3 && wanted.n >= 1, JSON.stringify(wanted));
+  const heli = await evalJs(`({ n: window.__game.police.helis.length, d: window.__game.police.helis.length ? Math.hypot(window.__game.police.helis[0].x - window.__game.player.x, window.__game.police.helis[0].z - window.__game.player.z) : -1 })`);
+  check('wanted 3+ brings the police helicopter', heli.n >= 1 && heli.d > 0 && heli.d < 90, JSON.stringify(heli));
   await step(6);
   const chase = await evalJs(`({ d: window.__game.police.nearestCopDistance(window.__game.player.x, window.__game.player.z) })`);
   check('police close in on the player', chase.d < 120, `nearest cruiser ${chase.d?.toFixed(1)}u`);

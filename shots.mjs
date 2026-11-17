@@ -14,9 +14,9 @@ const PORT = 8080;
 const DEBUG_PORT = 9223;
 
 const SHOTS = [
-  { name: '1-chase.jpg', query: '?shot=chase&seed=1', waitMs: 6000 },
-  { name: '2-drive.jpg', query: '?shot=drive&seed=1', waitMs: 5000 },
-  { name: '3-foot.jpg', query: '?shot=foot&seed=1', waitMs: 4000 },
+  { name: '1-chase.jpg', query: '?shot=chase&seed=1', waitMs: 700 },
+  { name: '2-story.jpg', query: '?shot=story&seed=1', waitMs: 3500 },
+  { name: '3-vista.jpg', query: '?shot=vista&seed=1', waitMs: 3000 },
   { name: '4-start.jpg', query: '?shot=start&seed=1', waitMs: 2000 },
 ];
 
@@ -40,7 +40,7 @@ async function main() {
   const chrome = spawn(CHROME, [
     '--headless=new', '--no-sandbox', '--disable-dev-shm-usage',
     `--remote-debugging-port=${DEBUG_PORT}`,
-    '--window-size=1280,800', '--hide-scrollbars',
+    '--window-size=1280,720', '--hide-scrollbars',
     '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
     'about:blank',
   ], { stdio: 'ignore' });
@@ -94,7 +94,7 @@ async function main() {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Network.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
 
   let failed = false;
   for (const shot of SHOTS) {
