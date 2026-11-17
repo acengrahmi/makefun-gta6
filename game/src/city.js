@@ -113,22 +113,106 @@ export function buildCity(scene, seed) {
   ground.receiveShadow = true;
   group.add(ground);
 
-  // Ocean to the south (warm turquoise) and a pale beach strip.
+  // Ocean to the south (deep sunset teal) and a pale beach strip.
   const sea = new THREE.Mesh(
     new THREE.PlaneGeometry(1200, 260),
-    new THREE.MeshLambertMaterial({ color: 0x2e9fc8 }),
+    new THREE.MeshLambertMaterial({ color: 0x2b7f9e }),
   );
   sea.rotation.x = -Math.PI / 2;
-  sea.position.set(0, -0.05, CITY_HALF + 130);
+  // South of the beach strip and ABOVE the ground plane — at y <= 0 the
+  // ground (which reaches z=443) paints straight over the water.
+  sea.position.set(0, 0.05, CITY_HALF + 162);
   group.add(sea);
   const beach = new THREE.Mesh(
     new THREE.PlaneGeometry(CITY_HALF * 2 + 320, 34),
-    new THREE.MeshLambertMaterial({ color: 0xf2e2b8 }),
+    new THREE.MeshLambertMaterial({ color: 0xf5dfae }),
   );
   beach.rotation.x = -Math.PI / 2;
   beach.position.set(0, 0.02, CITY_HALF + 17);
   beach.receiveShadow = true;
   group.add(beach);
+
+  // Boardwalk: a long wooden deck between the beachfront avenue and the sand,
+  // with the marina piers reaching into the water at the west end.
+  const deckMat = new THREE.MeshLambertMaterial({ color: 0x9a7350 });
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(CITY_HALF * 2 + 60, 0.3, 6), deckMat);
+  deck.position.set(0, 0.15, CITY_HALF + 8);
+  deck.receiveShadow = true;
+  group.add(deck);
+  const railMat = new THREE.MeshLambertMaterial({ color: 0x6e4f30 });
+  for (let x = -CITY_HALF - 24; x <= CITY_HALF + 24; x += 12) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.0, 0.22), railMat);
+    post.position.set(x, 0.65, CITY_HALF + 10.8);
+    group.add(post);
+  }
+  const pierMat = new THREE.MeshLambertMaterial({ color: 0x84643f });
+  for (const px of [-206, -186, -166]) {
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(5, 0.35, 58), pierMat);
+    pier.position.set(px, 0.35, CITY_HALF + 46);
+    pier.castShadow = true;
+    group.add(pier);
+    for (const pz of [CITY_HALF + 24, CITY_HALF + 44, CITY_HALF + 64]) {
+      const pile = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.6, 6), railMat);
+      pile.position.set(px, -0.3, pz);
+      group.add(pile);
+    }
+  }
+
+  // Beach umbrellas and towels: little wedges of colour along the sand.
+  const umbrellaCols = [0xff5f4d, 0xffd94d, 0x4dc3ff, 0xff7ad9, 0x7dff9a];
+  for (let n = 0; n < 16; n += 1) {
+    const ux = rand(rng, -CITY_HALF + 6, CITY_HALF - 6);
+    const uz = CITY_HALF + rand(rng, 13, 30);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 5), railMat);
+    pole.position.set(ux, 1.1, uz);
+    group.add(pole);
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(1.9, 0.7, 8),
+      new THREE.MeshLambertMaterial({ color: umbrellaCols[n % umbrellaCols.length] }));
+    shade.position.set(ux, 2.25, uz);
+    shade.castShadow = true;
+    group.add(shade);
+    const towel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 2.0),
+      new THREE.MeshLambertMaterial({ color: umbrellaCols[(n + 2) % umbrellaCols.length] }));
+    towel.position.set(ux + 1.6, 0.06, uz + 0.6);
+    group.add(towel);
+  }
+
+  // Boats riding at anchor off the marina and along the shore. Returned so the
+  // main loop can bob them on the swell.
+  const boats = [];
+  const hullCols = [0xf2f2f2, 0x2a9db8, 0xff7a4d, 0x2a3a6e, 0xffd94d, 0xe8e8e8, 0x3ad4a8];
+  function makeBoat(i, x, z) {
+    const b = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 6.4),
+      new THREE.MeshLambertMaterial({ color: hullCols[i % hullCols.length] }));
+    hull.position.y = 0.35; hull.castShadow = true;
+    b.add(hull);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.9, 2.2),
+      new THREE.MeshLambertMaterial({ color: 0xf6f2e8 }));
+    cabin.position.set(0, 1.2, -0.4);
+    b.add(cabin);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 5.4, 5), railMat);
+    mast.position.set(0, 3.4, 1.2);
+    b.add(mast);
+    const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.4),
+      new THREE.MeshLambertMaterial({ color: 0xfff6e0, side: THREE.DoubleSide }));
+    sail.position.set(0.15, 3.1, 0.1);
+    sail.rotation.y = 0.5;
+    b.add(sail);
+    b.position.set(x, 0.1, z);
+    b.rotation.y = rand(rng, -0.5, 0.5);
+    b.userData.baseY = 0.1;
+    group.add(b);
+    boats.push(b);
+    return b;
+  }
+  makeBoat(0, -196, CITY_HALF + 62);
+  makeBoat(1, -176, CITY_HALF + 78);
+  makeBoat(2, -214, CITY_HALF + 88);
+  makeBoat(3, -156, CITY_HALF + 58);
+  makeBoat(4, 60, CITY_HALF + 96);
+  makeBoat(5, 128, CITY_HALF + 74);
+  makeBoat(6, 196, CITY_HALF + 104);
 
   // Asphalt: one long strip per road line, dashed centre line texture.
   const roadTex = makeRoadTexture();
@@ -201,6 +285,24 @@ export function buildCity(scene, seed) {
     group.add(palm);
   }
 
+  // Palm rows dressing the beachfront avenue and the boardwalk — the postcard shot.
+  for (let x = -CITY_HALF + 4; x <= CITY_HALF - 4; x += 18) {
+    for (const side of [-1, 1]) {
+      const palm = makePalm();
+      palm.position.set(x + rand(rng, -2, 2), 0, 4 * PITCH + side * (ROAD_HALF + 2.5));
+      palm.rotation.y = rng() * Math.PI * 2;
+      palm.scale.setScalar(rand(rng, 0.95, 1.35));
+      group.add(palm);
+    }
+    if (x % 54 === 0) {
+      const palm = makePalm();
+      palm.position.set(x, 0, CITY_HALF + 13.5);
+      palm.rotation.y = rng() * Math.PI * 2;
+      palm.scale.setScalar(rand(rng, 0.9, 1.2));
+      group.add(palm);
+    }
+  }
+
   // Street lamps at intersections.
   const poleMat = new THREE.MeshLambertMaterial({ color: 0x3a4048 });
   const lampMat = new THREE.MeshLambertMaterial({ color: 0xffe9a8, emissive: 0xcc9933 });
@@ -240,5 +342,5 @@ export function buildCity(scene, seed) {
   landmarkSign('MARINA', -180, 170, '#7ad9ff');
   landmarkSign("SAL'S GARAGE", -128, -99, '#ffd94d');
 
-  return { colliders, group };
+  return { colliders, group, boats };
 }

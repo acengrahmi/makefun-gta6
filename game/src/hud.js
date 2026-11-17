@@ -21,8 +21,12 @@ export class Hud {
     this.pauseEl = document.getElementById('pauseMenu');
     this.map = document.getElementById('minimap');
     this.mapCtx = this.map.getContext('2d');
+    this.dialogueEl = document.getElementById('dialogue');
+    this.dialogueWho = document.getElementById('dialogueWho');
+    this.dialogueText = document.getElementById('dialogueText');
     this.toastTimer = null;
     this.bannerTimer = null;
+    this.dialogueTimer = null;
     this.lastMoney = -1;
     this.lastWanted = -1;
     this.lastHealth = -1;
@@ -83,6 +87,32 @@ export class Hud {
     this.bannerTimer = setTimeout(() => { this.bannerEl.style.display = 'none'; }, ms);
   }
 
+  /** Play a sequence of story dialogue lines in the dialogue box, one at a time. */
+  showDialogue(lines) {
+    if (this.dialogueTimer) { clearTimeout(this.dialogueTimer); this.dialogueTimer = null; }
+    if (!lines || !lines.length) { this.dialogueEl.style.display = 'none'; return; }
+    let i = 0;
+    const showNext = () => {
+      if (i >= lines.length) {
+        this.dialogueEl.style.display = 'none';
+        this.dialogueTimer = null;
+        return;
+      }
+      const line = lines[i];
+      i += 1;
+      this.dialogueWho.textContent = line.who;
+      this.dialogueText.textContent = line.text;
+      this.dialogueEl.style.display = 'block';
+      this.dialogueTimer = setTimeout(showNext, 4600);
+    };
+    showNext();
+  }
+
+  hideDialogue() {
+    if (this.dialogueTimer) { clearTimeout(this.dialogueTimer); this.dialogueTimer = null; }
+    this.dialogueEl.style.display = 'none';
+  }
+
   showMenu(show) { this.menuEl.style.display = show ? 'flex' : 'none'; }
   showPause(show, stats) {
     this.pauseEl.style.display = show ? 'flex' : 'none';
@@ -135,6 +165,12 @@ export class Hud {
     for (const c of police.cruisers) {
       const [x, y] = toMap(c.x, c.z);
       ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // police helicopters
+    ctx.fillStyle = '#c86bff';
+    for (const h of police.helis || []) {
+      const [x, y] = toMap(h.x, h.z);
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     // mission marker
     const s = missions.currentStep;

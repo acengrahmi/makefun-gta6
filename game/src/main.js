@@ -24,31 +24,89 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 
+// ---- golden hour: Costa Verde lives at sunset — a gradient sky dome, a low
+// orange sun in the west, long shadows and warm haze on the horizon. ----
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8ec3e8);
-scene.fog = new THREE.Fog(0xcfe0ea, 130, 560);
+scene.background = new THREE.Color(0x2a2a55);
+scene.fog = new THREE.Fog(0xe88a5a, 150, 640);
 
-const hemi = new THREE.HemisphereLight(0xbfd9ff, 0xe8b878, 1.25);
+function makeSkyTexture() {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 512;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.0, '#1c3260');   // zenith, dusky blue
+  grad.addColorStop(0.25, '#54407e');  // violet
+  grad.addColorStop(0.38, '#b3546e');  // rose
+  grad.addColorStop(0.46, '#f07f4a');  // orange
+  grad.addColorStop(0.5, '#ffc46a');   // horizon glow
+  grad.addColorStop(0.56, '#e88a52');  // below the horizon (mostly sea-covered)
+  grad.addColorStop(1.0, '#7a4a3a');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 4, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(950, 24, 14),
+  new THREE.MeshBasicMaterial({ map: makeSkyTexture(), side: THREE.BackSide, fog: false, depthWrite: false }),
+);
+scene.add(sky);
+
+// the sun itself: a bright disc with a soft halo, low over the western sea road
+const SUN_DIR = new THREE.Vector3(-0.83, 0.26, -0.18).normalize();
+const sunDisc = new THREE.Mesh(
+  new THREE.CircleGeometry(42, 24),
+  new THREE.MeshBasicMaterial({ color: 0xffc06a, fog: false }),
+);
+sunDisc.position.copy(SUN_DIR).multiplyScalar(880);
+sunDisc.lookAt(0, 0, 0);
+scene.add(sunDisc);
+function makeGlowTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,190,110,0.85)');
+  grad.addColorStop(0.4, 'rgba(255,140,70,0.35)');
+  grad.addColorStop(1, 'rgba(255,120,60,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: makeGlowTexture(), transparent: true, opacity: 0.9, fog: false, depthWrite: false,
+}));
+sunGlow.position.copy(SUN_DIR).multiplyScalar(870);
+sunGlow.scale.setScalar(430);
+scene.add(sunGlow);
+
+const hemi = new THREE.HemisphereLight(0xffb98a, 0x7a4a34, 0.85);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff0c8, 1.6);
-sun.position.set(180, 260, 120);
+const sun = new THREE.DirectionalLight(0xff9a3c, 2.0);
+sun.position.copy(SUN_DIR).multiplyScalar(420);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -160; sun.shadow.camera.right = 160;
-sun.shadow.camera.top = 160; sun.shadow.camera.bottom = -160;
-sun.shadow.camera.far = 700;
+sun.shadow.camera.left = -180; sun.shadow.camera.right = 180;
+sun.shadow.camera.top = 180; sun.shadow.camera.bottom = -180;
+sun.shadow.camera.far = 1000;
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 1.2;
 scene.add(sun);
 
-const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1200);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 2000);
 
 // ---- world ----
 const rng = mulberry32(SEED);
 const city = buildCity(scene, SEED);
-const traffic = new TrafficManager(scene, city.colliders, 14);
-const peds = new PedestrianManager(scene, city.colliders, 26, SEED);
+const traffic = new TrafficManager(scene, city.colliders, 16);
+const peds = new PedestrianManager(scene, city.colliders, 38, SEED);
 const combat = new CombatSystem(scene, city.colliders);
 const police = new PoliceSystem(scene, city.colliders, rng);
 const hud = new Hud();
@@ -68,6 +126,7 @@ const parkedSpots = [
 for (const [x, z, h] of parkedSpots) traffic.spawnParked('sedan', x, z, h);
 traffic.spawnParked('sports', -46, 108, Math.PI / 2);
 traffic.spawnParked('taxi', 46, -108, -Math.PI / 2);
+traffic.spawnParked('pickup', 8, 216, 0, 0x3a7a8a); // a teal pickup on the beachfront avenue
 
 // ---- state ----
 let state = 'menu'; // menu | playing | paused | busted | wasted
@@ -83,6 +142,10 @@ let crimeCooldown = 0;
 let pedKillCooldown = 0;
 let nextMissionTimer = -1;
 let playSeconds = 0;
+let elapsed = 0; // always advances — drives the boats, even in menus/shots
+let vistaCam = null; // { pos, look } while the vista screenshot is staged
+let prevCarHeading = 0;
+let camRoll = 0;
 let menuOrbit = 0;
 window.__errors = [];
 window.addEventListener('error', (e) => window.__errors.push(String(e.message || e.error)));
@@ -166,7 +229,7 @@ function startGame(save) {
     player.money = save.money;
     player.health = save.health;
     player.setPose(save.x, save.z, 0);
-    missions.index = Math.min(save.missionIndex, 3);
+    missions.index = Math.min(save.missionIndex, missions.total - 1);
     missions.completed = save.missionsDone || 0;
     missions.startMission(missions.index);
     hud.toast('Save loaded — welcome back to Costa Verde');
@@ -240,15 +303,17 @@ function handleEvent(type, data) {
     hud.banner(data.title, data.brief, 4200);
     hud.setObjective(data.title, data.steps[0].text);
     sound.missionDone();
+  } else if (type === 'dialogue') {
+    hud.showDialogue(data);
   } else if (type === 'step') {
     hud.setObjective(missions.current.title, data.text);
     hud.toast(data.text);
   } else if (type === 'mission-done') {
     player.money += data.reward;
-    hud.banner('MISSION COMPLETE', `+$${data.reward.toLocaleString('en-US')} — ${data.title}`, 3600);
+    hud.banner(`JOB ${missions.index + 1} OF ${missions.total} COMPLETE`, `+$${data.reward.toLocaleString('en-US')} — ${data.outro || data.title}`, 4200);
     sound.missionDone();
     saveGame();
-    if (missions.index + 1 < 4) {
+    if (missions.index + 1 < missions.total) {
       nextMissionTimer = 4;
     } else {
       hud.banner('COSTA VERDE IS YOURS', 'Every job done. The city is yours, Rico.', 5000);
@@ -380,24 +445,51 @@ function stageShot(name) {
     clearPathTraffic(path);
     autopilot = { mode: 'drive', path, wp: 0 };
   } else if (name === 'chase') {
-    const car = traffic.spawnParked('sports', -120, -100, Math.PI / 2, 0xd41e2a);
-    player.setPose(-120, -100, Math.PI / 2);
+    // The cover: westbound into the sunset on the Big Score, four stars, a
+    // cruiser crossing ahead and the PD helicopter raking its searchlight
+    // across the frame from the player's shoulder.
+    const car = traffic.spawnParked('sports', 120, -100, -Math.PI / 2, 0xd41e2a);
+    player.setPose(120, -100, -Math.PI / 2);
     player.inCar = true; player.car = car; player.body.mesh.visible = false;
+    camYaw = -Math.PI / 2; // camera square behind the car (the autopilot never turns it)
     player.money = 2450;
-    missions.startMission(3);
+    missions.startMission(5); // THE BIG SCORE
     missions.step = 1;
     missions.placeMarker();
     missions.onStepStart(); // sets wanted 3 + timer
+    police.addCrime(1); // four stars: cruisers behind, helicopter overhead
     missions.timer = 12;
-    const path = computeDrivePath(-120, -100, 135, -108);
+    camPitch = -0.02; // camera rides low, view tilts up: sky, sun, helicopter
+    camDist = 14.5;
+    // A two-cruiser roadblock angled across the intersection ahead — pursuit
+    // the camera can actually see, not just hear behind it.
+    traffic.spawnParked('police', -16, -97.5, -Math.PI / 2 + 0.35);
+    traffic.spawnParked('police', -16, -118.5, -Math.PI / 2 - 0.35);
+    const path = computeDrivePath(120, -100, -135, -108);
     clearPathTraffic(path);
     autopilot = { mode: 'drive', path, wp: 0 };
     // One police cruiser crossing ahead on the cross street, so the chase is in
     // the frame before it turns to pursue; the system spawns a second behind.
     const cruiser = new Car(scene, 'police');
-    cruiser.setPose(108, -216, 0);
+    cruiser.setPose(-108, -216, 0);
     police.cruisers.push(cruiser);
     police.spawnTimer = 4;
+  } else if (name === 'story') {
+    // A story beat: Rico meets Captain Mateo Reyes at the Marina, dialogue box
+    // open, the giver in his gold shirt beside the mission beacon, sea behind.
+    player.setPose(-183, 155, -Math.PI / 4);
+    player.money = 1200;
+    missions.startMission(2); // MARINA RUN — intro dialogue plays
+    camYaw = -Math.PI / 4;
+    camPitch = 0.2;
+    camDist = 11;
+  } else if (name === 'vista') {
+    // The postcard: over the water looking WNW along the coast — boats in
+    // the foreground, marina piers reaching into the sea, the boardwalk and
+    // beach sweeping away, the whole golden-hour skyline behind, sun in frame.
+    player.setPose(30, CITY_HALF + 8, Math.PI);
+    player.money = 1200;
+    vistaCam = { pos: new THREE.Vector3(120, 18, CITY_HALF + 107), look: new THREE.Vector3(-140, 6, 150) };
   } else {
     player.setPose(10, 27, Math.PI);
     missions.startMission(0);
@@ -424,6 +516,15 @@ function clearPathTraffic(path) {
 // ---- per-frame update ----
 function update(dt) {
   playSeconds += dt;
+  elapsed += dt;
+  // boats ride the swell off the marina, whatever the game state
+  if (city.boats) {
+    city.boats.forEach((b, i) => {
+      b.position.y = b.userData.baseY + Math.sin(elapsed * 0.9 + i * 1.7) * 0.22;
+      b.rotation.z = Math.sin(elapsed * 0.7 + i * 1.3) * 0.045;
+      b.rotation.x = Math.cos(elapsed * 0.55 + i * 2.1) * 0.03;
+    });
+  }
   crimeCooldown = Math.max(0, crimeCooldown - dt);
   pedKillCooldown = Math.max(0, pedKillCooldown - dt);
   if (nextMissionTimer > 0) {
@@ -495,7 +596,7 @@ function update(dt) {
   if (missions.active && s) {
     const dist = missions.objectiveDistance(player);
     const timerText = s.kind === 'timed' ? ` — ${Math.max(0, Math.ceil(150 - missions.timer))}s left` : '';
-    hud.setObjective(`${missions.current.title}  ·  ${dist}m${timerText}`, s.text);
+    hud.setObjective(`JOB ${missions.index + 1}/${missions.total} · ${missions.current.title}  ·  ${dist}m${timerText}`, s.text);
   } else if (!missions.active && missions.current) {
     hud.setObjective('COSTA VERDE', 'Press T to start the next job');
   }
@@ -505,11 +606,19 @@ function update(dt) {
 function updateCamera(dt) {
   if (state === 'menu') {
     menuOrbit += dt * 0.05;
-    const cx = Math.sin(menuOrbit) * 190;
-    const cz = Math.cos(menuOrbit) * 190;
-    camera.position.set(cx, 70, cz);
-    camera.lookAt(0, 10, 0);
+    const cx = Math.sin(menuOrbit) * 175;
+    const cz = Math.cos(menuOrbit) * 175;
+    camera.position.set(cx, 48, cz);
+    camera.lookAt(0, 16, 0);
     hud.drawMinimap(player, traffic, police, missions, city);
+    return;
+  }
+  if (vistaCam) {
+    // staged postcard: a slow drift over the water toward the skyline
+    const drift = Math.sin(elapsed * 0.05) * 6;
+    camera.position.set(vistaCam.pos.x + drift, vistaCam.pos.y, vistaCam.pos.z);
+    camera.lookAt(vistaCam.look.x, vistaCam.look.y, vistaCam.look.z);
+    if (Math.abs(camera.fov - 55) > 0.1) { camera.fov = 55; camera.updateProjectionMatrix(); }
     return;
   }
   const target = new THREE.Vector3(player.x, 0, player.z);
@@ -523,6 +632,31 @@ function updateCamera(dt) {
   camPos.lerp(desired, clamp(dt * 6, 0, 1));
   camera.position.copy(camPos);
   camera.lookAt(target.x, target.y + 2.2, target.z);
+  if (player.inCar && player.car) {
+    // chase cam feel: the field of view stretches with speed, and the frame
+    // leans a few degrees into every turn
+    const speed01 = clamp(Math.abs(player.car.speed) / player.car.stats.top, 0, 1);
+    const targetFov = 62 + speed01 * 11;
+    if (Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov = lerp(camera.fov, targetFov, clamp(dt * 3.5, 0, 1));
+      camera.updateProjectionMatrix();
+    }
+    let rate = player.car.heading - prevCarHeading;
+    while (rate > Math.PI) rate -= Math.PI * 2;
+    while (rate < -Math.PI) rate += Math.PI * 2;
+    const targetRoll = clamp(-rate * 1.1, -0.055, 0.055);
+    camRoll = lerp(camRoll, targetRoll, clamp(dt * 5, 0, 1));
+    camera.rotateZ(camRoll);
+  } else {
+    prevCarHeading = player.inCar && player.car ? player.car.heading : prevCarHeading;
+    if (Math.abs(camera.fov - 62) > 0.05) {
+      camera.fov = lerp(camera.fov, 62, clamp(dt * 3.5, 0, 1));
+      camera.updateProjectionMatrix();
+    }
+    camRoll = lerp(camRoll, 0, clamp(dt * 5, 0, 1));
+    if (Math.abs(camRoll) > 0.001) camera.rotateZ(camRoll);
+  }
+  if (player.inCar && player.car) prevCarHeading = player.car.heading;
 }
 
 // ---- main loop ----
@@ -546,7 +680,35 @@ function loop(now) {
   }
   renderer.render(scene, camera);
   frames += 1;
-  if (frames === 12) window.__shotReady = true;
+  if (!window.__shotReady) {
+    if (!SHOT) {
+      if (frames === 12) window.__shotReady = true; // the playtest's load signal
+    } else if (SHOT === 'chase') {
+      // The cover is only ready once the chase is actually composed: the car
+      // at speed, cruisers rolling and the helicopter overhead. (Wall-clock
+      // waits proved unreliable — a slow first frame let the run play out
+      // into a bust before the capture.)
+      // Compose by position, not by clock: mid-run on the open stretch
+      // (x between 45 and -10) the car is at full speed, cruisers are
+      // rolling and the parked roadblock at x=-16 sits ahead in the frame.
+      // The decisive test is geometric: project the helicopter into the
+      // frame and fire only while its body is actually visible (upper
+      // middle, clear of the objective banner) — in earlier takes it kept
+      // hanging just above the top edge, only its cone raking in.
+      let heliInFrame = false;
+      const heli = police.helis[0];
+      if (heli) {
+        const hv = new THREE.Vector3(heli.x, heli.y, heli.z).project(camera);
+        heliInFrame = hv.z < 1 && Math.abs(hv.x) < 0.8 && hv.y > 0.05 && hv.y < 0.78;
+      }
+      const composed = player.inCar && player.car && Math.abs(player.car.speed) > 24
+        && heliInFrame && police.cruisers.length >= 1
+        && player.x < 45 && player.x > 5;
+      if (composed || frames > 900) window.__shotReady = true;
+    } else if (frames === 12) {
+      window.__shotReady = true;
+    }
+  }
 }
 requestAnimationFrame(loop);
 
@@ -557,6 +719,6 @@ hud.setHealth(100);
 hud.setWanted(0);
 hud.setObjective('COSTA VERDE', 'Welcome to the coast.');
 if (SHOT) stageShot(SHOT);
-window.__game = { player, missions, police, traffic, peds, combat, startGame, stageShot,
+window.__game = { player, missions, police, traffic, peds, combat, camera, startGame, stageShot,
   // debug handle: advance the simulation by dt seconds (used by the playtest)
   step: (dt) => { update(dt); updateCamera(dt); } };

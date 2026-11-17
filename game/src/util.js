@@ -25,7 +25,8 @@ export function dist2D(ax, az, bx, bz) {
   return Math.sqrt(dx * dx + dz * dz);
 }
 
-/** Draw a building facade (warm plaster + lit windows) and return a THREE texture. */
+/** Draw a building facade (warm plaster + lit windows) and return a THREE texture.
+ * It is golden hour in Costa Verde, so most windows burn warm against the dusk. */
 export function makeFacadeTexture(base, lit, floors, cols, rng) {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 256;
@@ -36,10 +37,10 @@ export function makeFacadeTexture(base, lit, floors, cols, rng) {
   const ww = 128 / cols, wh = 256 / floors;
   for (let f = 0; f < floors; f += 1) {
     for (let k = 0; k < cols; k += 1) {
-      const on = rng() < 0.42;
-      g.fillStyle = on ? lit : 'rgba(52,64,84,0.9)';
+      const on = rng() < 0.62;
+      g.fillStyle = on ? lit : 'rgba(38,34,52,0.92)';
       g.fillRect(4 + k * ww, 8 + f * wh + 4, ww - 8, wh - 10);
-      if (on && rng() < 0.4) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(4 + k * ww, 8 + f * wh + 4, ww - 8, 3); }
+      if (on && rng() < 0.5) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(4 + k * ww, 8 + f * wh + 4, ww - 8, 3); }
     }
   }
   const tex = new THREE.CanvasTexture(c);
@@ -67,7 +68,7 @@ export function makeGroundTexture() {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#c9a06e';
+  g.fillStyle = '#cf9a68';
   g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 1200; i += 1) {
     g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)';

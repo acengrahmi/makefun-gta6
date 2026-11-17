@@ -7,12 +7,13 @@ const SKINS = [0xe8b88a, 0xc98a5a, 0x8a5a3a, 0xf2c9a0, 0x6a4a2e];
 const SHIRTS = [0xd43a3a, 0x3a7ad4, 0x3ad47a, 0xe8d43a, 0x9a4ad4, 0xe8e8e8, 0x222222, 0xff7a3a];
 const PANTS = [0x2a3a5a, 0x3a3a3a, 0x5a4a3a, 0x4a5a6a];
 
-/** Build a person mesh. `kind`: 'ped' | 'cop' | 'gang' | 'player'. */
+/** Build a person mesh. `kind`: 'ped' | 'cop' | 'gang' | 'player' | 'npc'.
+ * Story NPCs (Lena, Sal, Mateo, Dana…) wear gold so the player can spot them. */
 export function makePersonMesh(kind, rng) {
   const g = new THREE.Group();
   const skin = kind === 'player' ? 0xe8b88a : pick(rng, SKINS);
-  const shirt = kind === 'cop' ? 0x1a2a4a : kind === 'gang' ? 0x8a1a2a : pick(rng, SHIRTS);
-  const pants = kind === 'cop' ? 0x141a24 : kind === 'gang' ? 0x2a2a2a : pick(rng, PANTS);
+  const shirt = kind === 'cop' ? 0x1a2a4a : kind === 'gang' ? 0x8a1a2a : kind === 'npc' ? 0xffb52e : pick(rng, SHIRTS);
+  const pants = kind === 'cop' ? 0x141a24 : kind === 'gang' ? 0x2a2a2a : kind === 'npc' ? 0x24304a : pick(rng, PANTS);
   const skinMat = new THREE.MeshLambertMaterial({ color: skin });
   const shirtMat = new THREE.MeshLambertMaterial({ color: shirt });
   const pantsMat = new THREE.MeshLambertMaterial({ color: pants });
@@ -117,6 +118,13 @@ export class PedestrianManager {
   }
 
   randomSidewalkSpot() {
+    // a third of the crowd drifts along the boardwalk and the sand instead
+    if (this.rng() < 0.3) {
+      return {
+        x: (this.rng() * 2 - 1) * (CITY_HALF - 8),
+        z: CITY_HALF + 5 + this.rng() * 24,
+      };
+    }
     const k = ROAD_K[Math.floor(this.rng() * ROAD_K.length)] * PITCH;
     const along = (this.rng() * 2 - 1) * (CITY_HALF - 10);
     const side = this.rng() < 0.5 ? -1 : 1;

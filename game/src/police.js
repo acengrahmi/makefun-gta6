@@ -1,9 +1,157 @@
 // The wanted system: stars rise with crimes, fall with quiet time, and the Costa
-// Verde PD answers — cruisers that ram the player and cops on foot who grab him.
-import { clamp, dist2D } from './util.js';
+// Verde PD answers — cruisers that ram the player, cops on foot who grab him,
+// and from three stars up, a police helicopter that pins him in its searchlight.
+import { clamp, lerp, dist2D } from './util.js';
 import { PITCH, ROAD_K, CITY_HALF, nearestRoadPoint } from './city.js';
 import { Car } from './vehicles.js';
 import { Person } from './people.js';
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** Build the PD helicopter: dark body, glass nose, spinning rotors, skids. */
+function makeHelicopterMesh() {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1a2432 });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x0e2a3a });
+  const whiteMat = new THREE.MeshLambertMaterial({ color: 0xe8ecf2 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.8, 4.8), bodyMat);
+  body.castShadow = true;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.1, 1.4), glassMat);
+  nose.position.set(0, 0.15, 2.6);
+  g.add(nose);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.5, 2.2), whiteMat);
+  band.position.set(0, -0.2, 0.4);
+  g.add(band);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 4.6), bodyMat);
+  tail.position.set(0, 0.35, -4.4);
+  g.add(tail);
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.5, 0.9), bodyMat);
+  fin.position.set(0, 0.9, -6.5);
+  g.add(fin);
+  const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.24),
+    new THREE.MeshLambertMaterial({ color: 0x30363e }));
+  tailRotor.position.set(0.2, 0.9, -6.5);
+  g.add(tailRotor);
+  const rotor = new THREE.Group();
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(11.5, 0.07, 0.75),
+    new THREE.MeshLambertMaterial({ color: 0x22262c }));
+  rotor.add(blade);
+  const blade2 = blade.clone();
+  blade2.rotation.y = Math.PI / 2;
+  rotor.add(blade2);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(5.8, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false }));
+  disc.rotation.x = -Math.PI / 2;
+  rotor.add(disc);
+  rotor.position.y = 1.3;
+  g.add(rotor);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 6), bodyMat);
+  mast.position.y = 1.05;
+  g.add(mast);
+  for (const sx of [-0.85, 0.85]) {
+    const skid = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 3.6), whiteMat);
+    skid.position.set(sx, -1.25, 0.3);
+    g.add(skid);
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), bodyMat);
+    strut.position.set(sx, -0.95, 0.9);
+    g.add(strut);
+  }
+  // red/blue beacon pair, flashing like the cruisers' light bars
+  const beaconR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.4),
+    new THREE.MeshLambertMaterial({ color: 0xff2222, emissive: 0xaa0000 }));
+  beaconR.position.set(-0.5, 1.0, -1.6);
+  const beaconB = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.4),
+    new THREE.MeshLambertMaterial({ color: 0x2244ff, emissive: 0x0000aa }));
+  beaconB.position.set(0.5, 1.0, -1.6);
+  g.add(beaconR); g.add(beaconB);
+  g.userData.rotor = rotor;
+  g.userData.tailRotor = tailRotor;
+  g.userData.beaconR = beaconR;
+  g.userData.beaconB = beaconB;
+  return g;
+}
+
+/**
+ * One PD helicopter. It shadows the player from ahead of his heading so its
+ * searchlight cone rakes the street in front of him — and straight into the
+ * chase camera. The cone, the spotlight and the pool of light on the ground
+ * all track the player every frame.
+ */
+export class PoliceHelicopter {
+  constructor(scene, side) {
+    this.scene = scene;
+    this.side = side; // +1 / -1: which shoulder it flies on
+    this.mesh = makeHelicopterMesh();
+    scene.add(this.mesh);
+    this.x = 0; this.z = 0; this.y = 34; this.heading = 0;
+    this.spin = Math.random() * 6;
+    // visible light cone (narrow at the heli, wide at the street)
+    this.cone = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.0, 6.0, 1, 20, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffeeb8, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }),
+    );
+    scene.add(this.cone);
+    this.spot = new THREE.SpotLight(0xffe9a8, 2.4, 110, 0.34, 0.55, 0);
+    scene.add(this.spot);
+    scene.add(this.spot.target);
+    this.pool = new THREE.Mesh(
+      new THREE.CircleGeometry(5.0, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    this.pool.rotation.x = -Math.PI / 2;
+    scene.add(this.pool);
+  }
+
+  /** Place it (used on spawn, flying in from off the player's shoulder). */
+  setPose(x, y, z) {
+    this.x = x; this.y = y; this.z = z;
+    this.mesh.position.set(x, y, z);
+  }
+
+  update(dt, player, t) {
+    const heading = player.inCar && player.car ? player.car.heading : player.heading;
+    const fx = Math.sin(heading), fz = Math.cos(heading);
+    const px = fz, pz = -fx; // right-hand perpendicular of the heading
+    const ahead = this.side > 0 ? 23 : 17;
+    const sideOff = this.side * 10;
+    const wantX = player.x + fx * ahead + px * sideOff;
+    const wantZ = player.z + fz * ahead + pz * sideOff;
+    const wantY = 15.8 + Math.sin(t * 0.8 + this.side) * 1.1;
+    const k = clamp(dt * 2.4, 0, 1); // tight tracking: the light stays on the car
+    this.x = lerp(this.x, wantX, k);
+    this.z = lerp(this.z, wantZ, k);
+    this.y = lerp(this.y, wantY, clamp(dt * 1.8, 0, 1));
+    this.mesh.position.set(this.x, this.y, this.z);
+    this.mesh.lookAt(player.x, 1.5, player.z);
+    // rotors and beacons
+    this.spin += dt;
+    this.mesh.userData.rotor.rotation.y += dt * 26;
+    this.mesh.userData.tailRotor.rotation.x += dt * 34;
+    const flash = Math.floor(this.spin * 5) % 2 === 0;
+    this.mesh.userData.beaconR.visible = flash;
+    this.mesh.userData.beaconB.visible = !flash;
+    // searchlight: cone + real spotlight + pool of light on the street
+    const from = new THREE.Vector3(this.x, this.y - 1.2, this.z);
+    const to = new THREE.Vector3(player.x, 0.2, player.z);
+    const dir = to.clone().sub(from);
+    const len = dir.length();
+    this.cone.position.copy(from).addScaledVector(dir, 0.5);
+    this.cone.scale.set(1, len, 1);
+    this.cone.quaternion.setFromUnitVectors(UP, dir.normalize().multiplyScalar(-1));
+    this.spot.position.copy(from);
+    this.spot.target.position.copy(to);
+    this.pool.position.set(player.x, 0.14, player.z);
+  }
+
+  dispose() {
+    this.scene.remove(this.mesh);
+    this.scene.remove(this.cone);
+    this.scene.remove(this.spot);
+    this.scene.remove(this.spot.target);
+    this.scene.remove(this.pool);
+  }
+}
 
 export class PoliceSystem {
   constructor(scene, colliders, rng) {
@@ -16,7 +164,9 @@ export class PoliceSystem {
     this.bustTimer = 0;
     this.cruisers = [];
     this.cops = [];
+    this.helis = [];
     this.maxCruisers = 0;
+    this.time = 0;
   }
 
   addCrime(level) {
@@ -32,12 +182,25 @@ export class PoliceSystem {
     this.bustTimer = 0;
     for (const c of this.cruisers) this.scene.remove(c.mesh);
     for (const c of this.cops) this.scene.remove(c.mesh);
+    for (const h of this.helis) h.dispose();
     this.cruisers = [];
     this.cops = [];
+    this.helis = [];
   }
 
   update(dt, player, traffic, onBusted, onCrime) {
     const px = player.x, pz = player.z;
+    this.time += dt;
+    // air support: one helicopter from 3 stars, a second at 5
+    const wantHelis = this.wanted >= 5 ? 2 : this.wanted >= 3 ? 1 : 0;
+    while (this.helis.length < wantHelis) {
+      const side = this.helis.length === 0 ? 1 : -1;
+      const heli = new PoliceHelicopter(this.scene, side);
+      heli.setPose(px + side * 55, 32, pz - 40);
+      this.helis.push(heli);
+    }
+    while (this.helis.length > wantHelis) this.helis.pop().dispose();
+    for (const h of this.helis) h.update(dt, player, this.time);
     // wanted decays when the player stays clean and unseen
     if (this.wanted > 0) {
       this.decayTimer += dt;
@@ -123,6 +286,7 @@ export class PoliceSystem {
     let best = Infinity;
     for (const c of this.cruisers) best = Math.min(best, dist2D(c.x, c.z, x, z));
     for (const c of this.cops) best = Math.min(best, dist2D(c.x, c.z, x, z));
+    for (const h of this.helis) best = Math.min(best, dist2D(h.x, h.z, x, z));
     return best;
   }
 

@@ -4,10 +4,11 @@ import { clamp, lerp, angleLerp, dist2D } from './util.js';
 import { PITCH, ROAD_K, ROAD_HALF, CITY_HALF, collideCircle } from './city.js';
 
 const CAR_COLORS = {
-  sedan: [0xc23b2e, 0x2e6fc2, 0xe8e8e8, 0x3a3f46, 0x7a4a9e, 0x2e8a6a],
+  sedan: [0xc23b2e, 0x2e6fc2, 0xe8e8e8, 0x3a3f46, 0x7a4a9e, 0x2e8a6a, 0xe0a83a, 0x2a9db8, 0xff8a5f],
   taxi: [0xffc21a],
-  sports: [0xd41e2a, 0xff7a1a, 0x1a1a22, 0x0e7a5a],
+  sports: [0xd41e2a, 0xff7a1a, 0x1a1a22, 0x0e7a5a, 0xffd94d, 0x8a2be2],
   van: [0xd8d8d8, 0x5a6a7a, 0x8a5a3a],
+  pickup: [0x3a7a8a, 0xc25e2e, 0xe8e0cc, 0x4a6a3a, 0x8a2a3a],
   police: [0x14181e],
 };
 
@@ -16,6 +17,7 @@ const CAR_STATS = {
   taxi: { accel: 12, top: 28, grip: 2.3 },
   sports: { accel: 18, top: 42, grip: 3.0 },
   van: { accel: 9, top: 22, grip: 2.0 },
+  pickup: { accel: 11, top: 27, grip: 2.2 },
   police: { accel: 16, top: 38, grip: 2.8 },
 };
 
@@ -33,9 +35,23 @@ export function makeCarMesh(kind, colorHex) {
   g.add(body);
   const cabinH = kind === 'van' ? 0.9 : 0.7;
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.8, cabinH, kind === 'van' ? 3.4 : 2.1), glass);
-  cabin.position.set(0, bodyH + 0.35 + cabinH / 2 - 0.3, kind === 'van' ? -0.2 : 0.15);
+  cabin.position.set(0, bodyH + 0.35 + cabinH / 2 - 0.3, kind === 'van' ? -0.2 : kind === 'pickup' ? 0.95 : 0.15);
   cabin.castShadow = true;
   g.add(cabin);
+  if (kind === 'pickup') {
+    // open cargo bed behind the cab: dark floor and low side walls
+    const bedFloor = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.1, 2.0), trim);
+    bedFloor.position.set(0, bodyH + 0.28, -1.05);
+    g.add(bedFloor);
+    for (const sx of [-0.92, 0.92]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 2.0), paint);
+      wall.position.set(sx, bodyH + 0.5, -1.05);
+      g.add(wall);
+    }
+    const tailgate = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.5, 0.1), paint);
+    tailgate.position.set(0, bodyH + 0.5, -2.05);
+    g.add(tailgate);
+  }
   if (kind === 'sports') {
     const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 0.5), trim);
     spoiler.position.set(0, 1.55, -2.05);
@@ -175,7 +191,7 @@ export class TrafficManager {
     this.scene = scene;
     this.colliders = colliders;
     this.cars = [];
-    const kinds = ['sedan', 'sedan', 'taxi', 'van', 'sports'];
+    const kinds = ['sedan', 'sedan', 'taxi', 'van', 'sports', 'pickup'];
     for (let i = 0; i < count; i += 1) {
       const kind = kinds[i % kinds.length];
       const car = new Car(scene, kind);
