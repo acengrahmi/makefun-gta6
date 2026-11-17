@@ -1,3 +1,9 @@
+# makefun-gta6
+
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 # Costa Verde — an open-world crime game
 
 Rico Santana just rolled into **Costa Verde** with an empty wallet and a
@@ -8,6 +14,16 @@ car, run missions, dodge the cops, and get rich.
 An original game: its own city, characters, vehicles, names, story, art, sound
 and music. Nothing is copied from any commercial game. It runs fully offline
 from static files — serve `game/` and open `game/index.html` in desktop Chrome.
+
+## Run it
+
+```bash
+node serve.ts
+```
+
+This starts a tiny static server for the game on `http://localhost:8080`;
+open that address in desktop Chrome and play. (Or serve `game/` with any
+static file server and open `game/index.html`.)
 
 ## How to play
 
@@ -46,3 +62,7 @@ from static files — serve `game/` and open `game/index.html` in desktop Chrome
 ## License
 
 MIT — see `LICENSE`.
+
+---
+
+Entered on make.fun — see the bounty: https://make.fun/bounty/gta6-01
