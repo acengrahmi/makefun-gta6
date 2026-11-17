@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Costa Verde — Open World</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2b3d;
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1626;
     font-family: "Trebuchet MS", Verdana, sans-serif; color: #fff; }
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   .hud { position: fixed; z-index: 5; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,.7); }
@@ -31,13 +31,20 @@
     display: none; }
   #toast { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 19px; font-weight: bold;
     color: #ffe9a8; text-align: center; white-space: nowrap; }
+  #dialogue { left: 50%; bottom: 118px; transform: translateX(-50%); width: 600px; max-width: 86vw;
+    background: rgba(12,8,16,.82); border-left: 5px solid #ffb52e; border-radius: 6px;
+    padding: 10px 16px 12px; display: none; }
+  #dialogueWho { font-size: 12px; font-weight: bold; letter-spacing: 3px; color: #ffb52e; }
+  #dialogueText { font-size: 17px; line-height: 1.45; color: #fff6e8; margin-top: 2px; }
   #hint { left: 50%; bottom: 24px; transform: translateX(-50%); font-size: 13px; color: #e8f2ff;
     background: rgba(0,0,0,.45); padding: 5px 10px; border-radius: 6px; white-space: nowrap; }
   #damage { position: fixed; inset: 0; z-index: 4; pointer-events: none;
     box-shadow: inset 0 0 90px 30px rgba(255,0,0,.55); opacity: 0; transition: opacity .15s; }
   .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
-    justify-content: center; background: linear-gradient(160deg, rgba(10,25,45,.82), rgba(60,20,40,.78));
+    justify-content: center; background: linear-gradient(160deg, rgba(26,10,30,.84), rgba(96,30,14,.78));
     backdrop-filter: blur(2px); }
+  .panel .pitch { font-size: 14px; font-weight: bold; letter-spacing: 3px; color: #ffb52e;
+    margin: 2px 0 10px; }
   .panel { max-width: 640px; width: 92vw; text-align: center; padding: 28px 30px;
     background: rgba(0,0,0,.45); border: 1px solid rgba(255,220,120,.5); border-radius: 14px; }
   .panel h1 { margin: 0 0 4px; font-size: 52px; letter-spacing: 4px; color: #ffd94d;
@@ -68,16 +75,20 @@
 <div class="hud" id="speedBox" style="display:none">0<small>KM/H</small></div>
 <div class="hud" id="crosshair">+</div>
 <div class="hud" id="toast"></div>
+<div class="hud" id="dialogue"><div id="dialogueWho"></div><div id="dialogueText"></div></div>
 <div class="hud" id="hint">WASD move / drive &nbsp;·&nbsp; E enter car &nbsp;·&nbsp; Click shoot &nbsp;·&nbsp; Shift sprint &nbsp;·&nbsp; Space brake &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M music</div>
 <div class="hud" id="banner"><h1 id="bannerTitle"></h1><p id="bannerSub"></p></div>
 <div class="overlay" id="menu">
   <div class="panel">
     <h1>COSTA VERDE</h1>
     <h2>AN OPEN-WORLD CRIME STORY</h2>
-    <p>Rico Santana just rolled into Costa Verde with an empty wallet and a
-    reputation to build. Fixer <b>Lena Cruz</b> has work for him — if he can drive,
-    steal and shoot his way through it. The city is yours: steal any car, run
-    missions, dodge the cops, and get rich.</p>
+    <p class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</p>
+    <p>Rico Santana rolls into Costa Verde at golden hour with an empty wallet
+    and a reputation to build. Fixer <b>Lena Cruz</b>, garage boss Sal Bianchi,
+    boat captain Mateo Reyes and a cop who shouldn't be helping him have seven
+    jobs that will make him rich — or busted. Steal any car, outrun the
+    cruisers, and when the third star lights up, watch the sky: the police
+    helicopter is coming.</p>
     <p class="controls">WASD — move / drive &nbsp;·&nbsp; Mouse — look &nbsp;·&nbsp; E — enter / exit car<br>
     Click — shoot &nbsp;·&nbsp; Shift — sprint &nbsp;·&nbsp; Space — brake &nbsp;·&nbsp; P — pause &nbsp;·&nbsp; M — music</p>
     <button id="btnStart">START ENGINE</button>
