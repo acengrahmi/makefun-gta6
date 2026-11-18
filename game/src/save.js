@@ -1,24 +1,33 @@
-// Costa Verde — localStorage save: cash, story progress, position.
-CV.save = {
-  KEY: 'costa-verde-save-v1',
-  data: { cash: 0, jobIndex: 0, px: 150, pz: 176 },
-  load() {
-    try {
-      const raw = localStorage.getItem(this.KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (d && typeof d === 'object') {
-          this.data.cash = CV.clamp(Math.floor(+d.cash) || 0, 0, 99999999);
-          this.data.jobIndex = CV.clamp(Math.floor(+d.jobIndex) || 0, 0, 7); // clamp old saves
-          if (isFinite(+d.px)) this.data.px = CV.clamp(+d.px, -260, 260);
-          if (isFinite(+d.pz)) this.data.pz = CV.clamp(+d.pz, -260, 260);
-        }
+// Costa Verde — localStorage save: cash, story progress, position, race best.
+(function () {
+  'use strict';
+  const CV = (window.CV = window.CV || {});
+  const KEY = 'costaverde-save-v1';
+
+  CV.save = {
+    data: null,
+    load() {
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
+      if (!d || typeof d !== 'object') {
+        d = { cash: 0, nextJob: 0, jobsDone: 0, x: 150, z: 60, bestRace: 0, fares: 0, racesWon: 0 };
       }
-    } catch (e) { /* fresh save */ }
-    return this.data;
-  },
-  store() {
-    try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) { /* private mode */ }
-  },
-  wipe() { try { localStorage.removeItem(this.KEY); } catch (e) {} this.data = { cash: 0, jobIndex: 0, px: 150, pz: 176 }; },
-};
+      // Clamp anything odd an older save might hold.
+      d.cash = Math.max(0, Math.floor(+d.cash || 0));
+      d.nextJob = Math.min(7, Math.max(0, Math.floor(+d.nextJob || 0)));
+      d.jobsDone = Math.max(0, Math.floor(+d.jobsDone || 0));
+      d.x = Math.max(-280, Math.min(280, +d.x || 150));
+      d.z = Math.max(-280, Math.min(280, +d.z || 60));
+      d.bestRace = Math.max(0, +d.bestRace || 0);
+      this.data = d;
+      return d;
+    },
+    write() {
+      try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { /* private mode */ }
+    },
+    reset() {
+      try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+      return this.load();
+    },
+  };
+})();

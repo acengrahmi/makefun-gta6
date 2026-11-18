@@ -1,107 +1,145 @@
-// Costa Verde — HUD: cash, stars, objective bar, dialogue, banners, minimap.
-CV.hudBanner = function (G, title, sub) { G.bannerTitle = title; G.bannerSub = sub || ''; G.bannerT = 4.2; };
-CV.placeName = function (x, z) {
-  if (x < -206) return 'MARINA BOARDWALK';
-  if (x < -190) return 'PALM BEACH';
-  if (x > 105 && z > 95) return 'EAST WAREHOUSE';
-  if (x > 130 && z < -120) return 'SUNSET CLUB';
-  if (x > -115 && x < -60 && z > 0 && z < 80) return 'ST. VERDE HOSPITAL';
-  if (z > 55 && z < 78) return 'SUNSET BOULEVARD';
-  return 'COSTA VERDE';
-};
-CV.stepText = function (G) {
-  const M = CV.mission; if (!M.active) return '';
-  const job = CV.JOBS[M.idx], st = job.steps[M.step];
-  switch (st.t) {
-    case 'meet': return 'Meet ' + job.giver;
-    case 'pickup': return 'Pick up the package';
-    case 'deliver': return 'Deliver the package — FAST';
-    case 'steal': return 'Steal the Comet GT';
-    case 'fight': { const left = CV.systems.gangers.filter(g => !g.downed).length; return 'Take out the Vipers — ' + left + ' left'; }
-    case 'escape': return 'Escape to the marina!';
-  }
-  return '';
-};
-CV.hud = {
-  els: null,
-  init() {
-    this.els = {
-      cash: CV.el('hud-cash'), place: CV.el('hud-place'), health: CV.el('hud-health-fill'),
-      stars: CV.el('hud-stars'), objective: CV.el('hud-objective'), objTitle: CV.el('hud-obj-title'), objSub: CV.el('hud-obj-sub'),
-      dialogue: CV.el('hud-dialogue'), dlgName: CV.el('dlg-name'), dlgText: CV.el('dlg-text'),
-      radio: CV.el('hud-radio'), banner: CV.el('hud-banner'), bannerTitle: CV.el('banner-title'), bannerSub: CV.el('banner-sub'),
-      speed: CV.el('hud-speed'), minimap: CV.el('minimap'), busted: CV.el('hud-busted'), bustedTitle: CV.el('busted-title'),
-      startScreen: CV.el('start-screen'), hint: CV.el('hud-hint'),
+// Costa Verde — HUD: cash/health/stars, objective bar, dialogue, banners,
+// radio lines, speedometer and the live canvas minimap.
+(function () {
+  'use strict';
+  const CV = (window.CV = window.CV || {});
+  const H = {};
+  CV.hud = H;
+
+  let els = null, radioTimer = 0, lastRadio = null;
+
+  H.init = () => {
+    els = {
+      cash: CV.el('cash'), place: CV.el('place'), health: CV.el('health-fill'),
+      stars: CV.el('stars'), heat: CV.el('heat-fill'),
+      obj: CV.el('objective'), objTitle: CV.el('obj-title'), objText: CV.el('obj-text'), objDist: CV.el('obj-dist'),
+      dlg: CV.el('dialogue'), dlgName: CV.el('dlg-name'), dlgText: CV.el('dlg-text'),
+      banner: CV.el('banner'), bTitle: CV.el('banner-title'), bText: CV.el('banner-text'), bSub: CV.el('banner-sub'),
+      radio: CV.el('radio'), speed: CV.el('speed'), speedNum: CV.el('speed-num'),
+      hurt: CV.el('hurt'), map: CV.el('minimap'),
     };
-    this.mm = this.els.minimap.getContext('2d');
-  },
-  update(G) {
-    const e = this.els; if (!e) return;
-    e.cash.textContent = '$' + G.cash.toLocaleString();
-    e.place.textContent = CV.placeName(G.px, G.pz);
-    e.health.style.width = CV.clamp(G.health, 0, 100) + '%';
-    e.health.style.background = G.hurtT > 0 ? '#ff5040' : 'linear-gradient(90deg,#ff9a3d,#ffd94d)';
-    let stars = '';
-    for (let i = 0; i < 5; i++) stars += i < G.wanted ? '★' : '☆';
-    e.stars.textContent = stars;
-    e.stars.style.color = G.wanted > 0 ? '#ffd94d' : 'rgba(255,255,255,0.35)';
-    // objective bar
-    const M = CV.mission;
-    if (M.active) {
-      const job = CV.JOBS[M.idx], st = job.steps[M.step];
-      e.objTitle.textContent = 'JOB ' + (M.idx + 1) + '/7 · ' + job.name + (M.timer > 0 ? ' · ' + Math.ceil(M.timer) + 's left' : ' · ' + Math.round(CV.dist(G.px, G.pz, st.x, st.z)) + 'm');
-      e.objSub.textContent = CV.stepText(G);
-      e.objective.style.display = 'block';
-    } else if (G.started && G.jobIndex < 7) {
-      e.objTitle.textContent = 'COSTA VERDE';
-      e.objSub.textContent = 'Press T to start the next job — ' + CV.JOBS[G.jobIndex].name;
-      e.objective.style.display = 'block';
-    } else if (G.started) {
-      e.objTitle.textContent = 'COSTA VERDE';
-      e.objSub.textContent = 'All seven jobs done — the city is yours.';
-      e.objective.style.display = 'block';
-    } else e.objective.style.display = 'none';
-    // dialogue
-    if (G.dialogue && G.dialogue.length) {
-      e.dialogue.style.display = 'block';
-      e.dlgName.textContent = G.dialogue[0].speaker.toUpperCase();
-      e.dlgText.textContent = G.dialogue[0].text;
-    } else e.dialogue.style.display = 'none';
-    // radio
-    if (G.radioT > 0) { e.radio.style.display = 'block'; e.radio.textContent = G.radioText; }
-    else e.radio.style.display = 'none';
-    // banner
-    if (G.bannerT > 0) {
-      e.banner.style.display = 'block';
-      e.bannerTitle.textContent = G.bannerTitle; e.bannerSub.textContent = G.bannerSub;
-    } else e.banner.style.display = 'none';
-    // speed + busted
-    e.speed.style.display = G.inCar ? 'block' : 'none';
-    if (G.inCar) e.speed.innerHTML = Math.round(Math.abs(G.car.speed) * 3.6) + '<span> KM/H</span>';
-    e.busted.style.display = G.busted ? 'flex' : 'none';
-    if (G.busted) e.bustedTitle.textContent = G.wasted ? 'WASTED' : 'BUSTED';
-    this.drawMinimap(G);
-  },
-  drawMinimap(G) {
-    const g = this.mm, S = 220, W2M = v => (v + 260) / 520 * S;
-    g.fillStyle = '#20222e'; g.fillRect(0, 0, S, S);
-    g.fillStyle = '#2fa3a0'; g.fillRect(0, 0, W2M(-212), S); // sea
-    g.fillStyle = '#e8c188'; g.fillRect(W2M(-212), 0, W2M(-196) - W2M(-212), S); // beach
-    g.strokeStyle = '#4c4a55'; g.lineWidth = 5;
-    for (let i = 0; i < 8; i++) {
-      const r = W2M(CV.roadLine(i));
-      g.beginPath(); g.moveTo(r, 0); g.lineTo(r, S); g.stroke();
-      g.beginPath(); g.moveTo(0, r); g.lineTo(S, r); g.stroke();
+    H.mctx = els.map.getContext('2d');
+  };
+
+  H.update = (S, dt) => {
+    if (!els) return;
+    const P = S.player;
+    els.cash.textContent = CV.fmtMoney(S.cash);
+    els.place.textContent = CV.WORLD.placeAt(P.x, P.z);
+    els.health.style.width = Math.max(0, S.health) + '%';
+    els.health.style.background = S.health > 35 ? 'linear-gradient(90deg,#ffb347,#ff7847)' : '#ff4040';
+    els.stars.textContent = '★★★★★'.slice(0, S.wanted) + '☆☆☆☆☆'.slice(0, 5 - S.wanted);
+    els.stars.style.opacity = S.wanted ? 1 : 0.35;
+    els.heat.style.width = Math.min(100, (S.bustT / 2.2) * 100) + '%';
+    els.hurt.style.opacity = S.hurtT > 0 ? 0.5 : 0;
+
+    // Objective bar.
+    let title = '', text = '', dist = '';
+    if (S.job) {
+      const st = CV.systems.jobObjective(S);
+      title = 'JOB ' + (S.job.idx + 1) + '/7 · ' + S.job.def.name;
+      if (st) {
+        text = st.label;
+        if (st.t === 'deliver') text += '  ·  ' + Math.max(0, Math.ceil(S.job.stepT)) + 's left';
+        if (st.t === 'fight') {
+          const left = S.enemies.filter((e) => !e.down).length;
+          text += '  ·  ' + left + ' standing';
+        }
+        dist = Math.round(CV.dist(P.x, P.z, st.x, st.z)) + 'm';
+      }
+    } else if (S.race.active) {
+      title = 'STREET RACE · SUNSET GP';
+      text = 'Checkpoint ' + Math.min(S.race.cp + 1, CV.systems.RACE_CPS.length) + '/' + CV.systems.RACE_CPS.length + '  ·  ' + S.race.time.toFixed(1) + 's';
+    } else if (S.taxi.state === 'ride') {
+      title = 'TAXI FARE';
+      text = 'Take your passenger to the gold marker';
+      dist = Math.round(CV.dist(P.x, P.z, S.taxi.dx, S.taxi.dz)) + 'm';
+    } else if (S.taxi.state === 'hail') {
+      title = 'TAXI FARE';
+      text = 'A passenger is waving — stop beside them in a car';
+    } else if (CV.save.data.nextJob < 7) {
+      const j = CV.systems.JOBS[CV.save.data.nextJob];
+      title = 'COSTA VERDE';
+      text = 'Press T — next job: ' + j.name + ' (' + j.giver + ')';
+    } else {
+      title = 'COSTA VERDE';
+      text = 'All seven jobs done — the city is yours. Race the gate, run fares, own the sunset.';
     }
-    const dot = (x, z, color, r) => { g.fillStyle = color; g.beginPath(); g.arc(W2M(x), W2M(z), r || 3, 0, 6.29); g.fill(); };
-    const M = CV.mission;
-    if (M.active) { const st = CV.JOBS[M.idx].steps[M.step]; dot(st.x, st.z, '#ffd94d', 4.5); }
-    for (const c of CV.systems.cruisers) dot(c.x, c.z, '#ff4040', 3);
-    for (const c of CV.systems.footCops) dot(c.x, c.z, '#4f8aff', 2.6);
-    for (const h of CV.systems.helis) if (h.active) dot(h.x, h.z, '#c44fff', 3.6);
-    // player arrow
-    const px = W2M(G.px), pz = W2M(G.pz);
-    g.save(); g.translate(px, pz); g.rotate(Math.atan2(Math.sin(G.heading), -Math.cos(G.heading)) + Math.PI);
-    g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(0, -6); g.lineTo(4.4, 5); g.lineTo(-4.4, 5); g.closePath(); g.fill(); g.restore();
-  },
-};
+    els.objTitle.textContent = title;
+    els.objText.textContent = text;
+    els.objDist.textContent = dist;
+    els.obj.style.opacity = S.dialogue ? 0.25 : 1;
+
+    // Dialogue.
+    if (S.dialogue) {
+      els.dlg.style.display = 'block';
+      els.dlgName.textContent = S.dialogue.name.toUpperCase();
+      els.dlgText.textContent = S.dialogue.lines[S.dialogue.i] || '';
+    } else {
+      els.dlg.style.display = 'none';
+    }
+
+    // Banner.
+    if (S.banner && S.banner.t > 0) {
+      els.banner.style.display = 'block';
+      els.bTitle.textContent = S.banner.title;
+      els.bText.textContent = S.banner.text;
+      els.bSub.textContent = S.banner.sub || '';
+    } else {
+      els.banner.style.display = 'none';
+    }
+
+    // Radio line (shows for ~5 s after it is set).
+    if (S.radio && S.radio !== lastRadio) { lastRadio = S.radio; radioTimer = 5; }
+    if (radioTimer > 0) {
+      radioTimer -= dt;
+      els.radio.style.display = 'block';
+      els.radio.textContent = '📻 ' + lastRadio;
+      if (radioTimer <= 0) { els.radio.style.display = 'none'; S.radio = null; lastRadio = null; }
+    }
+
+    // Speedometer.
+    if (P.mode === 'car') {
+      els.speed.style.display = 'block';
+      els.speedNum.textContent = Math.round(Math.abs(P.car.speed) * 3.6);
+    } else {
+      els.speed.style.display = 'none';
+    }
+
+    H.drawMap(S);
+  };
+
+  H.drawMap = (S) => {
+    const g = H.mctx, W = 168, C = W / 2, sc = W / 700;
+    const px = (x) => C + x * sc, pz = (z) => C + z * sc;
+    g.clearRect(0, 0, W, W);
+    g.fillStyle = '#141824'; g.fillRect(0, 0, W, W);
+    g.fillStyle = '#155e6b'; g.fillRect(0, 0, px(-300), W); // sea
+    g.strokeStyle = '#39415e'; g.lineWidth = 1;
+    for (const s of CV.WORLD.streets) {
+      g.beginPath(); g.moveTo(px(s), 0); g.lineTo(px(s), W); g.stroke();
+      g.beginPath(); g.moveTo(0, pz(s)); g.lineTo(W, pz(s)); g.stroke();
+    }
+    g.strokeStyle = '#ffd76a'; g.lineWidth = 2.4;
+    g.beginPath(); g.moveTo(0, pz(60)); g.lineTo(W, pz(60)); g.stroke();
+    const dot = (x, z, color, r) => { g.fillStyle = color; g.beginPath(); g.arc(px(x), pz(z), r || 2.4, 0, 6.29); g.fill(); };
+    if (S.job) { const st = CV.systems.jobObjective(S); if (st) dot(st.x, st.z, '#ffd76a', 3.4); }
+    if (S.race.active) { const cp = CV.systems.RACE_CPS[S.race.cp]; if (cp) dot(cp[0], cp[1], '#51ff8a', 3.2); }
+    if (S.taxi.state === 'hail' && S.taxi.ped) dot(S.taxi.ped.x, S.taxi.ped.z, '#ffe94e', 3);
+    if (S.taxi.state === 'ride') dot(S.taxi.dx, S.taxi.dz, '#ffe94e', 3.2);
+    for (const e of S.enemies) if (!e.down) dot(e.x, e.z, '#ff5040', 2.2);
+    for (const c of S.cruisers) dot(c.x, c.z, '#ff4040', 2.6);
+    for (const c of S.cops) if (!c.down) dot(c.x, c.z, '#ff4040', 2);
+    for (const h of S.helis) dot(h.x, h.z, '#c77dff', 3);
+    // Player arrow.
+    const P = S.player;
+    g.save();
+    g.translate(px(P.x), pz(P.z));
+    g.rotate(Math.atan2(Math.sin(P.angle), Math.cos(P.angle)) * -1 + Math.PI);
+    // Canvas y is south-positive; world angle 0 faces +z (south). Draw arrow up = facing.
+    g.rotate(Math.PI);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(0, -5); g.lineTo(3.6, 4); g.lineTo(0, 2); g.lineTo(-3.6, 4); g.closePath(); g.fill();
+    g.restore();
+  };
+})();
