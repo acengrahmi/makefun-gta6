@@ -19,46 +19,31 @@ procedural three.js — no downloads, no assets, no server.
 
 ## Controls
 
-| Action | Key |
-| --- | --- |
-| Move / drive | `W A S D` or arrow keys |
-| Run | `Shift` |
-| Enter / exit car, talk, interact | `E` |
-| Shoot pistol | `F` or mouse click |
-| Handbrake | `Space` |
-| Camera | mouse drag / `Q` `E` while on foot |
-| Pause | `P` |
-| Mute | `M` |
+- **W A S D** — move / drive · **Shift** — sprint · **Mouse** — look (click the game to lock the pointer)
+- **F** — enter / exit a car · **Space** — handbrake · **Left mouse / J** — fire pistol
+- **E** — talk / interact · **M** — mute · **P** — pause
 
-## Features
+## How to run
 
-- **A living golden-hour city** — a 9×9 street grid with ~100 buildings in
-  three architectural styles (glass towers, art-deco hotels, brick low-rises),
-  procedurally lit windows, neon billboards and a warm ACES-graded sunset
-  with a visible sun disc and matching fog.
-- **The hero boulevard** — one wide palm-lined avenue with set-back buildings
-  running straight into the sunset over the sea; the Sunset GP races down it.
-- **The coast** — a sun-glitter path on animated water, a boardwalk, three
-  piers, sixteen beach umbrellas and seven sailboats.
-- **Traffic & crowds** — 20 AI cars driving the grid and 44 pedestrians on
-  the sidewalks who flee gunfire and speeding cars.
-- **Five-star wanted system** — crimes raise your stars; police cruisers
-  chase, foot cops shoot, and at three stars a helicopter joins with a moving
-  searchlight. Get cornered and you're BUSTED; get shot down and you wake up
-  at the hospital, lighter in the wallet either way.
-- **Seven story jobs** — a full campaign from a $400 welcome ride to the
-  $4,000 Sunset Showdown finale, with dialogue, objectives and payouts.
-- **Side hustles** — the Sunset GP checkpoint race (best time saved) and
-  taxi fares with distance fares and speed tips.
-- **Synthesized audio** — a WebAudio synthwave loop, engine hum, sirens,
-  gunshots and payout chimes; zero audio files.
-- **Persistent save** — money, job progress and race best time are kept in
-  `localStorage`.
+Serve the `game/` folder with any static file server and open `index.html`:
 
-## Running it
+```
+node serve.ts        # or: python3 -m http.server -d game 8080
+```
 
-Open `game/index.html` in a desktop browser (or serve the folder with
-`node serve.ts`). The entrypoint `main.ts` packages `game/` and
-`screenshots/` into the make.fun dossier.
+Then open http://localhost:8080 in a desktop browser. Progress (cash, jobs
+done, position) is saved to localStorage automatically.
+
+## What's in the city
+
+- A 9×9 street grid of 107 buildings in three architectural styles with neon
+  billboards, wrapped around a wide palm-lined hero boulevard
+- A working waterfront: sun-glitter sea, boardwalk, three piers, sixteen
+  beach umbrellas and seven sailboats under a low golden sun
+- 20 traffic cars and 44 pedestrians going about their evening
+- A 0–5 star wanted system: cruisers, foot cops and a searchlight helicopter;
+  get caught and you're BUSTED, get flatlined and you're WASTED
+- Seven story jobs with dialogue, plus the Sunset GP checkpoint race and
+  taxi fares between jobs
 
 Entered on make.fun — see the bounty: https://make.fun/bounty/gta6-01

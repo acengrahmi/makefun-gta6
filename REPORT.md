@@ -1,70 +1,87 @@
 # Costa Verde — Sunset Boulevard · Build Report
 
-Entry for make.fun **gta6-01** ("Make GTA 6"), rebuilt from scratch in a
-single recorded session. This file is updated as the build progresses; the
-final numbers below are the ones measured on the finished build.
-
 ## What was built
 
-A three.js (r149, vendored under `game/vendor/`) open-world crime game:
+A golden-hour open-world crime game in vanilla JS + three.js r149 (vendored
+at `game/vendor/three.min.js`), written from scratch for gta6-01:
 
-- `game/src/util.js` — seeded RNG, math helpers, keyboard/mouse input.
-- `game/src/city.js` — procedural city: 9×9 grid, ~100 buildings in 3 styles,
-  hero boulevard, sea with sun-glitter shader, boardwalk, piers, umbrellas,
-  sailboats, neon billboards, palms, streetlights.
-- `game/src/actors.js` — player, drivable/traffic/police cars, pedestrians,
-  police helicopter with searchlight.
-- `game/src/systems.js` — wanted system, combat, busted/hospital, the 7 story
-  jobs, Sunset GP race, taxi fares.
-- `game/src/hud.js` — HUD, dialogue, banners, minimap, title screen.
-- `game/src/audio.js` — WebAudio synthesized music + SFX.
-- `game/src/save.js` — localStorage save (money, job index, race best).
-- `game/src/main.js` — scene, golden-hour grade, fixed-step simulation loop,
-  `#stage=` staging for screenshots and the headless playtest.
-- `main.ts` — dossier packaging entrypoint (validation + inventory + copy).
+- **City** (`game/src/city.js`) — a 9×9 street grid with **107 buildings** in
+  three styles (glass towers with lit windows, pastel stucco slabs, lowrises)
+  plus animated neon billboards, wrapped around a palm-lined hero boulevard
+  with a planted median. ACES-filmic golden-hour grade, gradient sky, low
+  sun disc with a halo over the sea.
+- **Waterfront** — sun-glitter sea (900 animated sparkle points in a wedge
+  under the sun), boardwalk, **3 piers**, **16 beach umbrellas**, **7
+  sailboats** bobbing on the swell.
+- **Actors** (`game/src/actors.js`) — **20 traffic cars** with lane-following
+  AI that turns at intersections and brakes for the player, **44
+  pedestrians** who wander the sidewalks and flee gunfire, police cruisers
+  with flashing lightbars, foot cops, and a **searchlight helicopter** whose
+  spotlight tracks the player at 3+ stars.
+- **Systems** (`game/src/systems.js`) — a 0–5 star wanted system with decay,
+  a bust meter, BUSTED (police station respawn, 10% fine) and WASTED
+  (hospital respawn) states, **7 story jobs with full dialogue** — Welcome
+  to Costa Verde ($400), Hot Property (steal the gold Comet GT, $800),
+  Marina Run ($1,100), Payback Time (5 Vipers, $1,500), The Informant
+  ($1,800), The Big Score (timed bank job, $2,500), Sunset Showdown (finale,
+  $4,000) — plus the **Sunset GP** 9-checkpoint race ($600, best time kept)
+  and **taxi fares** with distance-based pay.
+- **Presentation** — HUD with cash, wanted stars, health and bust bars, a
+  live minimap (roads, sea, police, objective blips), dialogue boxes, centre
+  banners and a title screen carrying the pitch line. All sound is
+  synthesized WebAudio (`game/src/audio.js`): engine, sirens, gunfire, cash
+  registers and a 100 BPM synthwave loop. Progress persists in localStorage
+  (`game/src/save.js`). The simulation runs on a fixed 60 Hz timestep
+  decoupled from rAF.
 
-## Playtest
+## Playtest results
 
-`playtest.mjs` drives the game headlessly (Chromium, CDP pipe) in
-`#stage=playtest` mode and exercises movement, driving, wanted escalation,
-job flow, race, taxi, busted and save/load through the game's `window.CV`
-test surface.
-
-Results: **34/34 checks passed** (headless Chromium, `#stage=playtest`;
-re-run on the final code after all visual polish, still 34/34),
-covering: world composition (97 buildings, 20 traffic cars,
-44 pedestrians), ambient traffic/pedestrian motion, walking, entering /
-driving / exiting cars, crime → 3+ stars with helicopter and cruiser
-response, pistol hits, job 1 and job 2 end-to-end with exact payouts
-($250 → $650 → $1,450), the Sunset GP (finish + best time saved), a taxi
-fare (spawn, pickup, delivery, payment), BUSTED by police contact with
-hospital respawn and cleared heat, WASTED with hospital respawn, save
-persistence across a page reload, and the Sunset Showdown finale (8 Vipers,
-campaign complete). Zero page errors during the whole run.
-
-## Screenshots
-
-Captured with `shots.mjs` at 1280×720 from staged scenes:
-
-- `1-chase.jpg` — cover: boulevard chase into the sun, helicopter searchlight.
-- `2-story.jpg` — dialogue with Mateo Reyes at the marina.
-- `3-vista.jpg` — sunset vista, sun disc + glitter path on the sea.
-- `4-start.jpg` — title screen.
-
-Self-assessment: all four reviewed individually; weak first takes were
-re-staged and re-shot (posed frozen chase, deepened grade, rebuilt sea
-shader). **1-chase** — hero car with two cruisers in pursuit and the
-helicopter's searchlight cone on it, palms receding into the sunset, 4
-stars showing: strong cover. **2-story** — over-shoulder dialogue with
-Mateo Reyes on the pier, his name and line crisp in the dialogue box,
-boats and sunset behind: strong. **3-vista** — sun disc over a deep-blue
-sea covered in sun-glitter, palm silhouettes framing, pier as a leading
-line: strong. **4-start** — title over the boulevard at sunset, pitch line
-"SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY" legible: strong.
+`node playtest.mjs` (headless Chromium, CDP pipe, driving the game's
+`window.CV` surface): **40 passed, 0 failed** — page loads with zero page
+errors; world counts verified (107 buildings, 20 traffic, 49 pedestrians
+incl. NPCs, 9 parked cars); title → play; walking; entering/driving/exiting
+cars; gunfire fells a target and raises a wanted star; cruisers and the
+helicopter respond at 3 stars and stand down at 0; jobs 1, 2 and 4 played
+end to end with exact payouts ($400 / $800 / $1,500); the Sunset GP raced
+through all 9 checkpoints ($600, best time recorded); a taxi fare picked up,
+delivered and paid; BUSTED respawn at the station; WASTED respawn at the
+hospital at full health; cash verified identical after a full page reload
+(localStorage save). One intermediate run scored 38/40 on two timing-sensitive
+harness checks (random police spawn distances); the surrounding runs are
+40/40.
 
 ## Dossier
 
-`MAKEFUN_OUTPUT_DIR=out node main.ts` — dossier written: **613,174 bytes**
-(10 game files, 719,287 bytes of source including vendored three.js;
-4 screenshots, 373,461 bytes total, each under the 256 KiB cap). The
-`out/` build directory is a local artifact and is not part of the entry.
+`MAKEFUN_OUTPUT_DIR=out node main.ts` exits 0. `out/dossier.json` is
+**385,657 bytes**; `out/game` totals 702,099 bytes (10 source files +
+index.html + the vendored three.min.js); the four screenshots total
+216,048 bytes, each a 1280×720 JPEG under the 256 KiB cap.
+
+## Screenshots
+
+- `1-chase.jpg` (cover) — the orange Comet GT mid-chase on the hero
+  boulevard: two cruisers with lightbars on its tail, the helicopter's
+  searchlight above, 4 wanted stars, "LOSE THE COPS!" objective, minimap.
+- `2-story.jpg` — Mateo Reyes on the middle pier at sunset, mid-dialogue
+  ("Amigo! My cousin left a package at the marina office…"), sun halo over
+  the glittering sea behind the two figures.
+- `3-vista.jpg` — the postcard: sun disc and halo over the glitter path,
+  pier, beach umbrellas, sailboats and a framing palm from the boardwalk.
+- `4-start.jpg` — the title screen: COSTA VERDE / SUNSET BOULEVARD with the
+  pitch line "SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY", PLAY button
+  and the full control list over the live city.
+
+## Validation commands
+
+```
+node --check game/src/*.js playtest.mjs shots.mjs   # all parse
+node playtest.mjs                                    # 40 passed, 0 failed
+node shots.mjs                                       # captures all 4 screenshots
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts  # dossier builds, exit 0
+```
+
+Every screenshot was inspected after capture; the chase staging, pier
+framing, vista camera and sun glow were each revised and recaptured at
+least once (hash-only navigation reload fix in shots.mjs, cruiser/heli
+repositioning for the cover, pier-deck height fix for the story scene,
+flat glow disc replacing a sprite that blended unevenly over the sun).
