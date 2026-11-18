@@ -5,108 +5,123 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Costa Verde — an open-world crime story</title>
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; background:#1a1024; font-family:'Segoe UI', system-ui, sans-serif; color:#fff; }
-  #game-wrap, #game-wrap canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
-  .hud { position:fixed; z-index:5; pointer-events:none; }
-  #hud-top-left { top:14px; left:16px; }
-  #hud-cash { font-size:30px; font-weight:800; color:#7be495; text-shadow:0 2px 6px rgba(0,0,0,.55); line-height:1; }
-  #hud-place { font-size:12px; letter-spacing:3px; color:#ffe1ae; margin-top:3px; text-shadow:0 1px 4px rgba(0,0,0,.6); }
-  #hud-health { width:190px; height:11px; background:rgba(0,0,0,.45); border-radius:6px; margin-top:7px; overflow:hidden; }
-  #hud-health-fill { height:100%; width:100%; background:linear-gradient(90deg,#ff9a3d,#ffd94d); transition:width .2s; }
-  #hud-stars-wrap { top:12px; right:18px; text-align:right; }
-  #hud-wanted-label { font-size:11px; letter-spacing:4px; color:#ffe1ae; text-shadow:0 1px 4px rgba(0,0,0,.6); }
-  #hud-stars { font-size:27px; color:rgba(255,255,255,.35); text-shadow:0 2px 6px rgba(0,0,0,.5); line-height:1.15; }
-  #hud-objective { top:14px; left:50%; transform:translateX(-50%); width:min(560px,72vw); background:rgba(24,14,26,.78);
-    border:1.5px solid rgba(255,217,77,.75); border-radius:10px; padding:8px 18px 9px; text-align:center; display:none; }
-  #hud-obj-title { font-size:14.5px; font-weight:700; letter-spacing:2.5px; color:#ffd94d; }
-  #hud-obj-sub { font-size:15.5px; margin-top:2px; color:#fff; }
-  #hud-dialogue { left:50%; bottom:118px; transform:translateX(-50%); width:min(640px,86vw); background:rgba(16,12,20,.88);
-    border-left:4px solid #ffd94d; border-radius:8px; padding:12px 18px; display:none; }
-  #dlg-name { font-size:12.5px; font-weight:800; letter-spacing:3px; color:#ffd94d; margin-bottom:4px; }
-  #dlg-text { font-size:17px; line-height:1.35; }
-  #hud-radio { left:50%; bottom:86px; transform:translateX(-50%); font-size:14.5px; font-style:italic; color:#aee7ff;
-    background:rgba(10,16,26,.65); padding:5px 14px; border-radius:14px; display:none; white-space:nowrap; }
-  #hud-banner { top:24%; left:50%; transform:translateX(-50%); text-align:center; display:none; width:90vw; }
-  #banner-title { font-size:34px; font-weight:900; letter-spacing:3px; color:#ffd94d; text-shadow:0 3px 14px rgba(0,0,0,.7); }
-  #banner-sub { font-size:17px; margin-top:5px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.8); }
-  #minimap-wrap { left:16px; bottom:16px; width:190px; height:190px; border-radius:50%; overflow:hidden;
-    border:3px solid rgba(255,225,174,.55); box-shadow:0 4px 18px rgba(0,0,0,.5); }
-  #minimap { width:190px; height:190px; }
-  #hud-footer { bottom:14px; left:50%; transform:translateX(-50%); font-size:13.5px; color:#ffe9c9;
-    background:rgba(16,12,20,.62); padding:6px 16px; border-radius:8px; white-space:nowrap; }
-  #hud-footer b { color:#ffd94d; font-weight:700; }
-  #hud-speed { right:22px; bottom:16px; font-size:44px; font-weight:900; color:#fff; text-shadow:0 3px 10px rgba(0,0,0,.65); display:none; text-align:right; line-height:.95; }
-  #hud-speed span { display:block; font-size:12px; letter-spacing:3px; color:#ffd94d; }
-  #hud-busted { inset:0; display:none; align-items:center; justify-content:center; background:rgba(60,4,4,.38); z-index:8; }
-  #busted-title { font-size:74px; font-weight:900; letter-spacing:14px; color:#ff3b30; text-shadow:0 4px 24px rgba(0,0,0,.8); }
-  #hud-hint { top:64px; right:18px; font-size:12px; color:rgba(255,233,201,.75); text-align:right; }
-  /* ---------- title screen ---------- */
-  #start-screen { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(ellipse at 50% 120%, rgba(255,140,60,.20), rgba(16,8,22,.55) 65%); }
-  #start-card { width:min(700px,92vw); background:rgba(24,13,20,.84); border:1.5px solid rgba(255,190,100,.65);
-    border-radius:16px; padding:34px 44px 28px; text-align:center; box-shadow:0 24px 70px rgba(0,0,0,.6); }
-  #start-card h1 { margin:0; font-size:57px; font-weight:900; letter-spacing:5px;
-    background:linear-gradient(180deg,#ffe9a8,#ffb03a 60%,#ff7a2e); -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 0 34px rgba(255,150,50,.25); }
-  #start-card .tag { font-size:14.5px; letter-spacing:6.5px; color:#8ef0b3; margin-top:5px; }
-  #start-card .pitch { font-size:15.5px; font-weight:800; letter-spacing:3.5px; color:#ffd94d; margin-top:15px; }
-  #start-card .blurb { font-size:15.5px; line-height:1.5; color:#f4e9dc; margin-top:13px; }
-  #start-card .controls { font-size:13.5px; line-height:1.85; color:#ffe9c9; margin-top:14px; }
-  #start-card .controls b { color:#ffd94d; }
-  #start-btn { pointer-events:auto; cursor:pointer; margin-top:20px; font-size:19px; font-weight:900; letter-spacing:2.5px;
-    color:#2a1402; background:linear-gradient(180deg,#ffd94d,#ff9a2e); border:none; border-radius:10px; padding:14px 44px;
-    box-shadow:0 6px 22px rgba(255,150,40,.45); }
-  #start-btn:hover { filter:brightness(1.1); }
-  #start-card .note { font-size:12px; color:rgba(255,233,201,.65); margin-top:14px; }
+  html, body { margin:0; padding:0; overflow:hidden; background:#1a0f24; font-family:'Segoe UI', Arial, sans-serif; }
+  #game { position:fixed; inset:0; }
+  canvas.webgl { display:block; }
+  .hud { position:fixed; z-index:5; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.55); }
+  #top-left { top:14px; left:16px; }
+  #cash { font-size:30px; font-weight:800; color:#7dff8a; letter-spacing:.5px; }
+  #place { font-size:12px; letter-spacing:3px; color:#ffd9a0; margin-top:1px; }
+  #health-wrap { width:190px; height:9px; background:rgba(0,0,0,.45); border-radius:5px; margin-top:7px; overflow:hidden; }
+  #health-fill { height:100%; width:100%; background:linear-gradient(90deg,#ffb347,#ff7847); transition:width .2s; }
+  #top-right { top:14px; right:16px; text-align:right; }
+  #wanted-label { font-size:11px; letter-spacing:3px; color:#ffd9a0; }
+  #stars { font-size:24px; color:#ffd76a; line-height:1.1; }
+  #heat-wrap { width:130px; height:5px; background:rgba(0,0,0,.45); border-radius:3px; margin:4px 0 0 auto; overflow:hidden; }
+  #heat-fill { height:100%; width:0%; background:#ff5040; }
+  #objective { top:12px; left:50%; transform:translateX(-50%); width:min(620px,72vw); text-align:center;
+    background:rgba(24,12,34,.78); border:1.5px solid rgba(255,183,71,.85); border-radius:12px; padding:8px 18px 9px; transition:opacity .2s; }
+  #obj-title { color:#ffd76a; font-weight:700; letter-spacing:2.5px; font-size:14.5px; }
+  #obj-text { font-size:15.5px; margin-top:2px; }
+  #obj-dist { color:#ffd76a; font-weight:700; font-size:13px; margin-left:8px; }
+  #dialogue { left:50%; transform:translateX(-50%); bottom:86px; width:min(680px,86vw);
+    background:rgba(16,10,26,.88); border-left:4px solid #ffb347; border-radius:10px; padding:13px 18px 11px; display:none; }
+  #dlg-name { color:#ffd76a; font-weight:700; letter-spacing:2.5px; font-size:13px; }
+  #dlg-text { font-size:16.5px; line-height:1.45; margin-top:3px; }
+  #dlg-hint { color:#cbb; font-size:11.5px; margin-top:6px; letter-spacing:1px; }
+  #banner { top:24%; left:50%; transform:translateX(-50%); text-align:center; display:none; width:min(700px,90vw); pointer-events:none; }
+  #banner-title { font-size:44px; font-weight:900; letter-spacing:6px; color:#ffd76a; text-shadow:0 3px 14px rgba(0,0,0,.7); }
+  #banner-text { font-size:19px; margin-top:4px; text-shadow:0 2px 8px rgba(0,0,0,.8); }
+  #banner-sub { font-size:14.5px; color:#ffe2b8; margin-top:3px; font-style:italic; }
+  #radio { bottom:64px; left:16px; max-width:400px; background:rgba(16,10,26,.75); border-radius:8px;
+    padding:7px 12px; font-size:13.5px; color:#ffe2b8; display:none; }
+  #minimap-wrap { left:16px; bottom:44px; width:168px; height:168px; border-radius:50%; overflow:hidden;
+    border:2.5px solid rgba(255,215,106,.75); box-shadow:0 4px 18px rgba(0,0,0,.5); }
+  #speed { right:22px; bottom:52px; text-align:right; display:none; }
+  #speed-num { font-size:52px; font-weight:900; line-height:.95; }
+  #speed-unit { font-size:12px; letter-spacing:3px; color:#ffd9a0; }
+  #footer { bottom:10px; left:50%; transform:translateX(-50%); background:rgba(16,10,26,.72); border-radius:8px;
+    padding:6px 16px; font-size:12.5px; color:#e8ddcf; white-space:nowrap; }
+  #footer b { color:#ffd76a; }
+  #hurt { inset:0; background:radial-gradient(ellipse at center, transparent 55%, rgba(255,30,20,.55) 100%); opacity:0; pointer-events:none; transition:opacity .15s; }
+  #paused { top:40%; left:50%; transform:translate(-50%,-50%); font-size:34px; font-weight:800; letter-spacing:5px; display:none; }
+  /* ------- title screen ------- */
+  #title { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; }
+  #title-card { text-align:center; max-width:760px; width:88vw; background:rgba(18,8,28,.66); border:1.5px solid rgba(255,183,71,.7);
+    border-radius:18px; padding:34px 44px 28px; backdrop-filter:blur(3px); box-shadow:0 18px 60px rgba(0,0,0,.55); }
+  #title h1 { margin:0; font-size:74px; font-weight:900; letter-spacing:8px;
+    background:linear-gradient(180deg,#ffe9a8,#ffb347 55%,#ff7847); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 34px rgba(255,150,60,.25); }
+  #title .sub { color:#8ef0dd; letter-spacing:6px; font-size:15px; margin-top:2px; }
+  #title .pitch { color:#ffd76a; letter-spacing:3.5px; font-weight:700; font-size:15.5px; margin-top:14px; }
+  #title .blurb { color:#f4e9dc; font-size:15.5px; line-height:1.55; margin:14px auto 4px; max-width:640px; }
+  #title .blurb b { color:#ffd76a; }
+  #title .controls { color:#d8cbb8; font-size:13px; line-height:1.9; margin-top:10px; }
+  #title .controls b { color:#ffd76a; }
+  #start-btn { margin-top:18px; font-size:19px; font-weight:800; letter-spacing:3px; color:#2a1400;
+    background:linear-gradient(180deg,#ffd76a,#ff9a3c); border:none; border-radius:10px; padding:13px 46px; cursor:pointer;
+    box-shadow:0 6px 24px rgba(255,150,60,.45); }
+  #start-btn:hover { filter:brightness(1.08); }
+  #title .fine { color:#bfae99; font-size:12px; margin-top:14px; }
 </style>
 </head>
 <body>
-<div id="game-wrap"></div>
+<div id="game"></div>
 
-<div class="hud" id="hud-top-left">
-  <div id="hud-cash">$0</div>
-  <div id="hud-place">COSTA VERDE</div>
-  <div id="hud-health"><div id="hud-health-fill"></div></div>
+<div class="hud" id="top-left">
+  <div id="cash">$0</div>
+  <div id="place">SUNSET BOULEVARD</div>
+  <div id="health-wrap"><div id="health-fill"></div></div>
 </div>
-<div class="hud" id="hud-stars-wrap">
-  <div id="hud-wanted-label">WANTED</div>
-  <div id="hud-stars">☆☆☆☆☆</div>
+<div class="hud" id="top-right">
+  <div id="wanted-label">WANTED</div>
+  <div id="stars">☆☆☆☆☆</div>
+  <div id="heat-wrap"><div id="heat-fill"></div></div>
 </div>
-<div class="hud" id="hud-objective"><div id="hud-obj-title"></div><div id="hud-obj-sub"></div></div>
-<div class="hud" id="hud-dialogue"><div id="dlg-name"></div><div id="dlg-text"></div></div>
-<div class="hud" id="hud-radio"></div>
-<div class="hud" id="hud-banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
-<div class="hud" id="minimap-wrap"><canvas id="minimap" width="220" height="220"></canvas></div>
-<div class="hud" id="hud-footer"><b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>E</b> enter / exit car &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> brake &nbsp;·&nbsp; <b>T</b> next job &nbsp;·&nbsp; <b>F</b> dialogue &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> music</div>
-<div class="hud" id="hud-speed">0<span>KM/H</span></div>
-<div class="hud" id="hud-busted"><div id="busted-title">BUSTED</div></div>
+<div class="hud" id="objective">
+  <span id="obj-title">COSTA VERDE</span>
+  <div><span id="obj-text"></span><span id="obj-dist"></span></div>
+</div>
+<div class="hud" id="dialogue">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <div id="dlg-hint">F ▸ continue</div>
+</div>
+<div class="hud" id="banner">
+  <div id="banner-title"></div>
+  <div id="banner-text"></div>
+  <div id="banner-sub"></div>
+</div>
+<div class="hud" id="radio"></div>
+<div class="hud" id="minimap-wrap"><canvas id="minimap" width="168" height="168"></canvas></div>
+<div class="hud" id="speed"><div id="speed-num">0</div><div id="speed-unit">KM/H</div></div>
+<div class="hud" id="footer"><b>WASD</b> move / drive · <b>Mouse</b> look · <b>E</b> enter / exit car · <b>Click</b> shoot · <b>Shift</b> sprint · <b>Space</b> brake · <b>T</b> next job · <b>F</b> dialogue · <b>P</b> pause · <b>M</b> music</div>
+<div class="hud" id="hurt"></div>
+<div class="hud" id="paused">PAUSED</div>
 
-<div id="start-screen">
-  <div id="start-card">
+<div id="title">
+  <div id="title-card">
     <h1>COSTA VERDE</h1>
-    <div class="tag">AN OPEN-WORLD CRIME STORY</div>
+    <div class="sub">AN OPEN-WORLD CRIME STORY</div>
     <div class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
-    <p class="blurb">Rico Santana rolls into Costa Verde at golden hour with an empty wallet and a reputation
-      to build. Fixer <b>Lena Cruz</b>, garage boss <b>Sal Bianchi</b>, boat captain <b>Mateo Reyes</b> and one cop
-      who shouldn't be helping him have seven jobs that will make him rich — or busted. Steal any car, run the jobs,
-      and when the third star lights up, watch the sky: the police helicopter is coming.</p>
-    <div class="controls">
-      <b>WASD</b> — move / drive &nbsp;·&nbsp; <b>Mouse</b> — look &nbsp;·&nbsp; <b>E</b> — enter / exit car<br>
-      <b>Click</b> — shoot &nbsp;·&nbsp; <b>Shift</b> — sprint &nbsp;·&nbsp; <b>Space</b> — brake &nbsp;·&nbsp; <b>P</b> — pause &nbsp;·&nbsp; <b>M</b> — music
-    </div>
+    <p class="blurb">Rico Santana rolls into Costa Verde at golden hour with an empty wallet and a reputation to build.
+      Fixer <b>Lena Cruz</b>, garage boss <b>Sal Bianchi</b>, boat captain <b>Mateo Reyes</b> and one cop who shouldn't be
+      helping him — <b>Officer Dana Ruiz</b> — have seven jobs that will make him rich, or busted. Steal any car, run the
+      jobs, race the Sunset GP, work taxi fares — and when the third star lights up, watch the sky: the police helicopter is coming.</p>
+    <div class="controls"><b>WASD</b> — move / drive · <b>Mouse</b> — look · <b>E</b> — enter / exit car · <b>Click</b> — shoot · <b>Shift</b> — sprint · <b>Space</b> — brake · <b>T</b> — next job · <b>F</b> — dialogue · <b>P</b> — pause · <b>M</b> — music</div>
     <button id="start-btn">START ENGINE</button>
-    <div class="note">Original game. No real city, person or car is copied. Runs fully offline.</div>
+    <div class="fine">Original game. No real city, person or car is copied. Runs fully offline.</div>
   </div>
 </div>
 
 <script src="vendor/three.min.js"></script>
 <script src="src/util.js"></script>
-<script src="src/save.js"></script>
-<script src="src/audio.js"></script>
 <script src="src/city.js"></script>
 <script src="src/actors.js"></script>
 <script src="src/systems.js"></script>
 <script src="src/hud.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/save.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>
