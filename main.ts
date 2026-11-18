@@ -1,76 +1,97 @@
-// Costa Verde — make.fun dossier builder (entrypoint).
-// Copies game/ and screenshots/ into the output directory, sanity-checks the
-// screenshots, prints the feature outline the judges read, and writes the
-// dossier with the kit's own buildDossier so it matches the scorer byte for byte.
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+// Costa Verde — Sunset Boulevard: the make.fun gta6-01 entrypoint.
+//
+// The game itself is the game/ folder beside this file: plain static files
+// (game/index.html plus its ES modules and the vendored three.js build) that
+// a desktop browser runs offline. This program is the packaging step: it
+// validates the entry, inventories it, copies game/ and screenshots/ into
+// the output directory and writes dossier.json — the summary the judge
+// reads — with the vendored make.fun library.
+//
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+//
+// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output.
+
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const root = process.cwd();
-const outDir = process.env.MAKEFUN_OUTPUT_DIR
-  ? join(root, process.env.MAKEFUN_OUTPUT_DIR)
-  : join(root, 'out');
+const here = fileURLToPath(new URL('.', import.meta.url));
+const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-export const FEATURES = [
-  'Open-world crime game in a golden-hour coastal city: a 9x9 street grid, ~100 buildings, one sunset that never sets',
-  'HERO BOULEVARD: a wide palm-lined avenue running into the sun, with set-back art-deco blocks, glass towers, rooftop water towers and neon billboards (HOTEL, COSTA VERDE, OPEN LATE, MARINA)',
-  'Sky: multi-stop gradient dome (deep blue to gold), a big low sun disc with halo, pink-lit clouds, warm fog and long shadows',
-  'Sea with a sun-glitter path, 7 bobbing sailboats, 3 marina piers, beach, boardwalk and 16 umbrellas',
-  'On foot and driving: WASD + mouse look, sprint, steal any parked or moving car (sedans, sports, pickups, vans, a convertible)',
-  'Chase camera with speed FOV kick (62 to 73 degrees), camera roll in turns and a live km/h speedometer',
-  'Wanted system 0-5 stars: pursuing cruisers with flashing light bars, foot cops, BUSTED fines and hospital respawns, stars decay when unseen',
-  'POLICE HELICOPTER from 3 stars (a second at 5): spinning rotors, flashing beacon, a real spotlight with a visible searchlight cone and ground light pool, purple minimap dot',
-  'Pistol combat both ways with tracers: Vipers and cops shoot back, pedestrians flee gunfire',
-  'STORY MODE: 7 jobs with named givers and dialogue — Lena Cruz, Sal Bianchi, Mateo Reyes, Officer Dana Ruiz — package runs, a stolen Comet GT, a marina cargo run, a warehouse fight, an informant rescue, a timed big score and a sunset showdown finale',
-  'STREET RACE (Sunset GP): a glowing start gate on the boulevard, 6 checkpoints, timer, $300 prize, best time saved, repeatable',
-  'TAXI FARES: waving pedestrians hail you — pick them up in any car and deliver them across town for distance-based fares',
-  'Street life: 20 traffic cars with headlights, 44 pedestrians, streetlights, parked stealable cars',
-  'Full HUD: cash, district name, health, wanted stars with a bust meter, objective bar with distance, dialogue boxes, radio lines, banners and a live minimap (police red, helicopter purple, objectives gold)',
-  'Synthesized WebAudio only: engine pitch follows speed, gunshots, sirens, cash chimes and a four-chord sunset music loop — no audio files',
-  'localStorage save: cash, story progress, position, race best time, fares and races won',
-  'Runs fully offline from static files; the only library is a vendored three.js',
+// The files the entry is meaningless without. If any is missing the dossier
+// would describe a broken game, so fail loudly here instead.
+const REQUIRED = [
+  'game/index.html',
+  'game/vendor/three.min.js',
+  'game/src/util.js',
+  'game/src/city.js',
+  'game/src/actors.js',
+  'game/src/systems.js',
+  'game/src/hud.js',
+  'game/src/audio.js',
+  'game/src/save.js',
+  'game/src/main.js',
+  'screenshots/1-chase.jpg',
+  'screenshots/2-story.jpg',
+  'screenshots/3-vista.jpg',
+  'screenshots/4-start.jpg',
 ];
-
-function copyTree() {
-  rmSync(outDir, { recursive: true, force: true });
-  mkdirSync(outDir, { recursive: true });
-  cpSync(join(root, 'game'), join(outDir, 'game'), { recursive: true });
-  cpSync(join(root, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
-}
-
-function checkScreenshots() {
-  const dir = join(outDir, 'screenshots');
-  const files = readdirSync(dir).filter((f) => /\.(jpe?g|png)$/i.test(f)).sort();
-  if (files.length < 3 || files.length > 4) throw new Error(`screenshots: expected 3-4 images, found ${files.length}`);
-  for (const f of files) {
-    const p = join(dir, f);
-    const bytes = statSync(p).size;
-    if (bytes > 262144) throw new Error(`screenshots/${f}: ${bytes} bytes, over the 262144 cap`);
-    const head = readFileSync(p).subarray(0, 3);
-    const isJpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-    const isPng = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e;
-    if (!isJpeg && !isPng) throw new Error(`screenshots/${f}: not a JPEG or PNG`);
-    console.log(`  shot ${f}: ${bytes} bytes OK`);
+for (const rel of REQUIRED) {
+  if (!existsSync(join(here, rel))) {
+    throw new Error(`Costa Verde entry is incomplete: missing ${rel}`);
   }
-  return files;
 }
 
-function main() {
-  console.log('Costa Verde — building dossier into', outDir);
-  copyTree();
-  const shots = checkScreenshots();
-  if (!existsSync(join(outDir, 'game', 'index.html'))) throw new Error('game/index.html missing after copy');
-  const dossier = buildDossier(outDir, {
+// Screenshot gate, mirroring the scorer's own caps: at most 4 shots, each a
+// JPEG of at most 256 KiB. Checked here so a bad capture fails the build,
+// not the judging.
+const shots = readdirSync(join(here, 'screenshots')).filter((f) => /\.jpe?g$/i.test(f)).sort();
+if (shots.length > 4) throw new Error(`too many screenshots: ${shots.length} (max 4)`);
+let shotBytes = 0;
+for (const f of shots) {
+  const size = statSync(join(here, 'screenshots', f)).size;
+  if (size > 262144) throw new Error(`screenshot ${f} is ${size} bytes (max 262144)`);
+  shotBytes += size;
+}
+
+// Inventory the game sources for the build log: the judge reads the same
+// outline from the dossier, and a human skimming this output should see the
+// same shape — eight modules, one vendored library, no stray files.
+function inventory(dir, prefix = '') {
+  const rows = [];
+  for (const name of readdirSync(dir).sort()) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) rows.push(...inventory(p, prefix + name + '/'));
+    else rows.push({ path: prefix + name, bytes: statSync(p).size });
+  }
+  return rows;
+}
+const gameFiles = inventory(join(here, 'game'));
+const gameBytes = gameFiles.reduce((a, f) => a + f.bytes, 0);
+
+mkdirSync(out, { recursive: true });
+cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
+mkdirSync(join(out, 'screenshots'), { recursive: true });
+cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+
+// The scorer's own caps (reference/gate.json): only text_max_bytes shapes
+// the bytes; the others refuse an entry the scorer would refuse (more than
+// 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB
+// of game files in all, or a path under game/ over 1000 bytes).
+writeFileSync(
+  join(out, 'dossier.json'),
+  buildDossier(out, {
     text_max_bytes: 163840,
     screenshots: { max: 4, max_bytes: 262144 },
     game_max_files: 993,
     game_max_bytes: 50331648,
-  });
-  writeFileSync(join(outDir, 'dossier.json'), dossier);
-  console.log(`dossier.json: ${dossier.length} bytes, ${shots.length} screenshots embedded`);
-  console.log('\nFeatures:');
-  for (const f of FEATURES) console.log('  - ' + f);
-  console.log(`\nDone: Costa Verde dossier ready (${FEATURES.length} features, ${shots.length} screenshots).`);
-}
+    game_path_max_bytes: 1000,
+  }),
+);
 
-main();
+console.log(`Costa Verde — Sunset Boulevard`);
+console.log(`  game files: ${gameFiles.length} (${gameBytes} bytes)`);
+for (const f of gameFiles) console.log(`    ${f.path} — ${f.bytes}`);
+console.log(`  screenshots: ${shots.length} (${shotBytes} bytes) — ${shots.join(', ')}`);
+console.log(`  dossier written to ${join(out, 'dossier.json')}`);
