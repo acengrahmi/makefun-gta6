@@ -1,361 +1,330 @@
-// actors.js — the moving population of Costa Verde: low-poly people (player
-// avatar, civilians, story NPCs, gang members, foot cops), cars (civilian
-// traffic, the stealable Comet GT, police cruisers) with simple arcade
-// physics and lane-following traffic AI, and the police helicopter with its
-// sweeping searchlight.
+// actors.js — the living population of Costa Verde: vehicle and pedestrian
+// factories (traffic sedans, taxis, the Comet GT, police cruisers, foot cops,
+// the searchlight helicopter) and the AI that drives them: lane-following
+// traffic, wandering/fleeing pedestrians, and police who hunt the player.
 
-import { clamp, lerpAngle, makeRng, rand, pick, WORLD, streetCoord } from './util.js';
-import { collide } from './city.js';
+import { CENTERS, STREET_HALF, CITY_MIN, CITY_MAX, clamp, angleLerp, dist2, collideCircle } from './util.js';
 
-const T = () => window.THREE;
+const bodyGeo = new THREE.BoxGeometry(1.9, 0.62, 4.4);
+const cabinGeo = new THREE.BoxGeometry(1.7, 0.55, 2.2);
+const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 10);
+const wheelMat = new THREE.MeshLambertMaterial({ color: 0x14151a });
+const glassMat = new THREE.MeshLambertMaterial({ color: 0x1c2733 });
 
-// ---------------------------------------------------------------- people ---
-const SKIN = [0xf2c49b, 0xc68863, 0x8a5a3b, 0x6e4530, 0xffdbac];
-const SHIRTS = [0xff5d5d, 0x39d0ff, 0xffd23e, 0x7dff5e, 0xff8ac2, 0xb78cff, 0xffffff, 0xff7847, 0x4fe3c1];
-const PANTS = [0x2e3a55, 0x4a3a2a, 0x222222, 0x5d6a72, 0x704214];
-
-// Builds a little articulated person: swinging legs, one arm that can raise a
-// pistol. Returns the group plus the bits the animator needs.
-export function makePerson(rng, { shirt, pants, skin, cop = false, gang = false } = {}) {
-  const THREE = T();
+export function makeVehicleMesh(kind, color) {
   const g = new THREE.Group();
-  const skinMat = new THREE.MeshLambertMaterial({ color: skin ?? pick(rng, SKIN) });
-  const shirtMat = new THREE.MeshLambertMaterial({ color: gang ? 0x39ff6a : cop ? 0x24406e : (shirt ?? pick(rng, SHIRTS)) });
-  const pantsMat = new THREE.MeshLambertMaterial({ color: cop ? 0x1c2a44 : (pants ?? pick(rng, PANTS)) });
-  const legGeo = new THREE.BoxGeometry(0.20, 0.78, 0.22);
-  const legL = new THREE.Mesh(legGeo, pantsMat); legL.position.set(-0.13, 0.39, 0);
-  const legR = new THREE.Mesh(legGeo, pantsMat); legR.position.set(0.13, 0.39, 0);
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.30), shirtMat);
-  torso.position.y = 1.14;
-  const armGeo = new THREE.BoxGeometry(0.15, 0.62, 0.17);
-  const armL = new THREE.Mesh(armGeo, shirtMat); armL.position.set(-0.36, 1.16, 0);
-  const armR = new THREE.Mesh(armGeo, shirtMat); armR.position.set(0.36, 1.16, 0);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 8), skinMat);
-  head.position.y = 1.72;
-  g.add(legL, legR, torso, armL, armR, head);
-  if (cop) {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.10, 10),
-      new THREE.MeshLambertMaterial({ color: 0x16283f }));
-    cap.position.y = 1.90; g.add(cap);
+  const paint = new THREE.MeshLambertMaterial({ color });
+  const body = new THREE.Mesh(bodyGeo, paint);
+  body.position.y = 0.62; body.castShadow = true; g.add(body);
+  const cabin = new THREE.Mesh(cabinGeo, glassMat);
+  cabin.position.set(0, 1.18, -0.2); g.add(cabin);
+  if (kind === 'comet') {
+    body.scale.set(1.02, 0.78, 1.06);
+    cabin.position.y = 1.02;
+    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.4), paint);
+    spoiler.position.set(0, 1.05, -2.1); g.add(spoiler);
   }
-  if (gang) {
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.215, 0.09, 10),
-      new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
-    band.position.y = 1.82; g.add(band);
+  if (kind === 'van') { body.scale.set(1.05, 1.5, 1.15); cabin.position.y = 1.5; }
+  if (kind === 'taxi') {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0xffe95d }));
+    sign.position.set(0, 1.6, -0.2); g.add(sign);
   }
-  g.userData.parts = { legL, legR, armL, armR, torso, head };
-  return g;
-}
-
-// A walker: wanders the sidewalks, flees danger, can stand as an NPC, can be
-// shot. The fight behaviour of gang/cops is layered on by systems.js, which
-// flips `mode` to 'fight' and steers the walker itself.
-export class Walker {
-  constructor(scene, rng, opts = {}) {
-    this.mesh = makePerson(rng, opts);
-    this.rng = rng;
-    this.pos = this.mesh.position;
-    this.pos.set(opts.x ?? 0, 0, opts.z ?? 0);
-    this.heading = rand(rng, 0, Math.PI * 2);
-    this.speed = 0;
-    this.walkSpeed = rand(rng, 1.1, 1.7);
-    this.mode = opts.mode ?? 'walk'; // walk | stand | fight | down | passenger
-    this.hp = opts.hp ?? 30;
-    this.target = null;
-    this.waitT = rand(rng, 0, 2);
-    this.fleeFrom = null;
-    this.fleeT = 0;
-    this.animT = rand(rng, 0, 6);
-    this.dead = false;
-    scene.add(this.mesh);
-  }
-  pickSidewalkTarget() {
-    const r = this.rng;
-    // Walk toward a point on a random nearby sidewalk line.
-    const alongX = r() < 0.5;
-    const line = streetCoord(Math.floor(rand(r, -4, 5))) + (r() < 0.5 ? -10.5 : 10.5);
-    const along = clamp((alongX ? this.pos.z : this.pos.x) + rand(r, -90, 90), -245, 245);
-    this.target = alongX ? { x: line, z: along } : { x: along, z: line };
-  }
-  panic(from, t = 3.5) {
-    if (this.mode === 'walk') { this.fleeFrom = from; this.fleeT = t; }
-  }
-  hit(dmg) {
-    this.hp -= dmg;
-    if (this.hp <= 0 && !this.dead) {
-      this.dead = true;
-      this.mode = 'down';
-      this.mesh.rotation.x = -Math.PI / 2;
-      this.mesh.position.y = 0.25;
-      return true;
-    }
-    return false;
-  }
-  update(dt, colliders) {
-    if (this.dead) return;
-    this.animT += dt * (2 + this.speed * 3.2);
-    const p = this.mesh.userData.parts;
-    const swing = Math.sin(this.animT * 3) * clamp(this.speed / 2, 0, 1) * 0.55;
-    p.legL.rotation.x = swing; p.legR.rotation.x = -swing;
-    p.armL.rotation.x = -swing * 0.7;
-    if (this.mode !== 'fight') p.armR.rotation.x = swing * 0.7;
-    if (this.mode === 'stand' || this.mode === 'passenger') { this.speed = 0; return; }
-    if (this.mode === 'fight') return; // systems.js steers fighters
-    let tx, tz, want = this.walkSpeed;
-    if (this.fleeT > 0 && this.fleeFrom) {
-      this.fleeT -= dt;
-      const dx = this.pos.x - this.fleeFrom.x, dz = this.pos.z - this.fleeFrom.z;
-      const d = Math.hypot(dx, dz) || 1;
-      tx = this.pos.x + (dx / d) * 12; tz = this.pos.z + (dz / d) * 12;
-      want = 4.4;
-    } else {
-      if (!this.target || Math.hypot(this.target.x - this.pos.x, this.target.z - this.pos.z) < 1.6) {
-        if (this.waitT > 0) { this.waitT -= dt; this.speed = 0; return; }
-        this.pickSidewalkTarget();
-        this.waitT = rand(this.rng, 0, 2.5);
-      }
-      tx = this.target.x; tz = this.target.z;
-    }
-    const wantHeading = Math.atan2(tx - this.pos.x, tz - this.pos.z);
-    this.heading = lerpAngle(this.heading, wantHeading, clamp(dt * 5, 0, 1));
-    this.speed = lerp(this.speed, want, dt * 4);
-    this.pos.x += Math.sin(this.heading) * this.speed * dt;
-    this.pos.z += Math.cos(this.heading) * this.speed * dt;
-    collide(this.pos, 0.45, colliders);
-    this.mesh.rotation.y = this.heading;
-  }
-}
-const lerp = (a, b, t) => a + (b - a) * t;
-
-// ------------------------------------------------------------------ cars ---
-const CAR_COLORS = [0xd64541, 0x3f7fbf, 0xe8b93e, 0xdadada, 0x37b878, 0xe2703a, 0x8e6cc8, 0x30323a, 0xf2f2f2, 0xbf3f7f];
-
-export function makeCarMesh(kind, color) {
-  const THREE = T();
-  const g = new THREE.Group();
-  const isCop = kind === 'cop';
-  const isComet = kind === 'comet';
-  const paint = new THREE.MeshLambertMaterial({ color: isCop ? 0xf4f4f6 : isComet ? 0x12c2b8 : color });
-  const dark = new THREE.MeshLambertMaterial({ color: 0x1c1e24 });
-  const glass = new THREE.MeshLambertMaterial({ color: 0x18222e });
-  const bodyH = isComet ? 0.52 : 0.62;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, bodyH, 4.1), paint);
-  body.position.y = 0.55;
-  g.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.0), isCop ? dark : glass);
-  cabin.position.set(0, 1.05, -0.2);
-  g.add(cabin);
-  if (isCop) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.3, 4.14), dark);
-    stripe.position.y = 0.42; g.add(stripe);
+  if (kind === 'cruiser') {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.3, 4.44),
+      new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }));
+    stripe.position.y = 0.66; g.add(stripe);
     const bar = new THREE.Group();
-    const bl = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 0.3), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
-    bl.position.x = -0.3;
-    const br = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 0.3), new THREE.MeshBasicMaterial({ color: 0x2a6bff }));
-    br.position.x = 0.3;
-    bar.add(bl, br);
-    bar.position.y = 1.42;
+    const red = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 0.5), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
+    red.position.x = -0.45;
+    const blue = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 0.5), new THREE.MeshBasicMaterial({ color: 0x2a6aff }));
+    blue.position.x = 0.45;
+    bar.add(red); bar.add(blue);
+    bar.position.set(0, 1.55, -0.2);
     g.add(bar);
     g.userData.lightbar = bar;
   }
-  if (isComet) {
-    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.4), dark);
-    spoiler.position.set(0, 1.02, -1.95); g.add(spoiler);
-    const scoop = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 1.1), dark);
-    scoop.position.set(0, 0.92, 1.2); g.add(scoop);
+  const hl = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 0.08), new THREE.MeshBasicMaterial({ color: 0xfff2b0 }));
+  hl.position.set(0, 0.66, 2.22); g.add(hl);
+  const tl = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.08), new THREE.MeshBasicMaterial({ color: 0xff3040 }));
+  tl.position.set(0, 0.7, -2.22); g.add(tl);
+  for (const [wx, wz] of [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI / 2; w.position.set(wx, 0.36, wz);
+    g.add(w);
   }
-  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 10);
-  const wheels = [];
-  for (const [wx, wz] of [[-0.85, 1.35], [0.85, 1.35], [-0.85, -1.35], [0.85, -1.35]]) {
-    const w = new THREE.Mesh(wheelGeo, dark);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(wx, 0.36, wz);
-    g.add(w); wheels.push(w);
-  }
-  const hl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 0.06), new THREE.MeshBasicMaterial({ color: 0xfff2b0 }));
-  hl.position.set(0, 0.62, 2.06); g.add(hl);
-  const tl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.14, 0.06), new THREE.MeshBasicMaterial({ color: 0xff3524 }));
-  tl.position.set(0, 0.66, -2.06); g.add(tl);
-  g.userData.wheels = wheels;
   return g;
 }
 
-// One car, three brains: 'traffic' follows the grid, 'cop' hunts a target,
-// 'player' is driven by systems.js directly (this class just holds state).
-export class Car {
-  constructor(scene, rng, { kind = 'traffic', color, x = 0, z = 0, heading = 0 } = {}) {
-    this.kind = kind;
-    this.mesh = makeCarMesh(kind, color ?? pick(rng, CAR_COLORS));
-    this.pos = this.mesh.position;
-    this.pos.set(x, 0, z);
-    this.heading = heading;
-    this.speed = 0;
-    this.maxSpeed = kind === 'cop' ? 27 : kind === 'comet' ? 30 : rand(rng, 9.5, 13);
-    this.rng = rng;
-    this.steer = 0;
-    this.throttle = 0;
-    this.brake = false;
-    this.target = null;
-    this.stuckT = 0;
-    this.flashT = rand(rng, 0, 1);
-    scene.add(this.mesh);
-  }
-  get x() { return this.pos.x; }
-  get z() { return this.pos.z; }
-  frontX() { return this.pos.x + Math.sin(this.heading) * 2.4; }
-  frontZ() { return this.pos.z + Math.cos(this.heading) * 2.4; }
+function laneCoord(center, dir, axis) {
+  // right-hand traffic: offset to the driver's right of the centre line
+  return axis === 'z' ? center + (dir > 0 ? -4 : 4) : center + (dir > 0 ? 4 : -4);
+}
 
-  // Shared arcade move: accelerate toward `wantSpeed`, steer toward a point.
-  drive(dt, steerTarget, wantSpeed, colliders, obstacles) {
-    if (steerTarget) {
-      const want = Math.atan2(steerTarget.x - this.pos.x, steerTarget.z - this.pos.z);
-      let d = want - this.heading;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      this.steer = clamp(d * 1.6, -1, 1);
-      this.heading += this.steer * clamp(Math.abs(this.speed) * 0.16, 0.2, 1.5) * dt * 2.2 * Math.sign(this.speed || 1);
+export function spawnTraffic(scene, rng, count) {
+  const cars = [];
+  const colors = [0xd94f30, 0x3f7fbf, 0xe8e3d8, 0x59b06a, 0x8a5fb0, 0xbfb23f, 0x707880, 0xff8c42];
+  for (let i = 0; i < count; i++) {
+    const axis = rng() < 0.5 ? 'x' : 'z';
+    const dir = rng() < 0.5 ? 1 : -1;
+    const center = CENTERS[Math.floor(rng() * CENTERS.length)];
+    const along = -250 + rng() * 500;
+    const kind = rng() < 0.18 ? 'taxi' : (rng() < 0.1 ? 'van' : 'sedan');
+    const mesh = makeVehicleMesh(kind, kind === 'taxi' ? 0xffc61a : colors[i % colors.length]);
+    const lane = laneCoord(center, dir, axis);
+    const car = {
+      mesh, kind, axis, dir, center, lane,
+      x: axis === 'x' ? along : lane,
+      z: axis === 'z' ? along : lane,
+      heading: axis === 'x' ? dir * Math.PI / 2 : (dir > 0 ? 0 : Math.PI),
+      speed: 0, targetSpeed: 9 + rng() * 4, turnCooldown: rng() * 6,
+      driver: 'traffic', hp: 100, honk: 0,
+    };
+    mesh.position.set(car.x, 0, car.z);
+    mesh.rotation.y = car.heading;
+    scene.add(mesh);
+    cars.push(car);
+  }
+  return cars;
+}
+
+export function spawnParked(scene, rng, spots) {
+  const cars = [];
+  const colors = [0xb0b6ba, 0x7a4a8c, 0x2a6a8c, 0xc2b280, 0x50565c, 0x8c2a3a];
+  for (let i = 0; i < spots.length; i++) {
+    const s = spots[i];
+    const kind = s.kind || 'sedan';
+    const mesh = makeVehicleMesh(kind, s.color || colors[i % colors.length]);
+    const car = {
+      mesh, kind, x: s.x, z: s.z, heading: s.heading || 0, speed: 0,
+      driver: null, hp: 100, locked: !!s.locked, id: s.id || '',
+    };
+    mesh.position.set(s.x, 0, s.z);
+    mesh.rotation.y = car.heading;
+    scene.add(mesh);
+    cars.push(car);
+  }
+  return cars;
+}
+
+// ---- pedestrians -----------------------------------------------------------
+const skinTones = [0xf2c79b, 0xc98d5e, 0x8a5a34, 0x6e4525];
+const shirtColors = [0xff5d5d, 0x4de3ff, 0xffd23f, 0x7dff6a, 0xff8ac2, 0xf2ede2, 0x5db9ff, 0xff7847];
+
+export function makePedMesh(rng, opts = {}) {
+  const g = new THREE.Group();
+  const shirt = new THREE.MeshLambertMaterial({ color: opts.shirt ?? shirtColors[Math.floor(rng() * shirtColors.length)] });
+  const skin = new THREE.MeshLambertMaterial({ color: skinTones[Math.floor(rng() * skinTones.length)] });
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.75, 0.26), new THREE.MeshLambertMaterial({ color: opts.pants ?? 0x2c3242 }));
+  legs.position.y = 0.38; g.add(legs);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.3), shirt);
+  torso.position.y = 1.1; torso.castShadow = true; g.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 8), skin);
+  head.position.y = 1.68; g.add(head);
+  if (opts.cop) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.12, 10), new THREE.MeshLambertMaterial({ color: 0x1c2f57 }));
+    cap.position.y = 1.86; g.add(cap);
+  }
+  if (opts.marker) {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 4), new THREE.MeshBasicMaterial({ color: opts.marker }));
+    m.rotation.x = Math.PI; m.position.y = 2.6; g.add(m);
+    g.userData.markerMesh = m;
+  }
+  g.userData.legs = legs; g.userData.torso = torso;
+  return g;
+}
+
+export function spawnPeds(scene, rng, count) {
+  const peds = [];
+  for (let i = 0; i < count; i++) {
+    const mesh = makePedMesh(rng);
+    // sidewalk points: just outside a random street centre line
+    const cx = CENTERS[Math.floor(rng() * CENTERS.length)];
+    const cz = CENTERS[Math.floor(rng() * CENTERS.length)];
+    const onX = rng() < 0.5;
+    const x = onX ? cx + (rng() < 0.5 ? -1 : 1) * (STREET_HALF + 2.6) : -250 + rng() * 500;
+    const z = onX ? -250 + rng() * 500 : cz + (rng() < 0.5 ? -1 : 1) * (STREET_HALF + 2.6);
+    const ped = {
+      mesh, x, z, tx: x, tz: z, heading: rng() * Math.PI * 2,
+      speed: 1.2 + rng() * 0.9, state: 'walk', hp: 30, role: 'ped',
+      walkPhase: rng() * 6, fleeT: 0, repick: rng() * 4,
+    };
+    mesh.position.set(x, 0, z);
+    scene.add(mesh);
+    peds.push(ped);
+  }
+  return peds;
+}
+
+// ---- helicopter --------------------------------------------------------------
+export function makeHeli(scene) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x22242c });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, 5.6), bodyMat);
+  g.add(body);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 5), bodyMat);
+  tail.position.set(0, 0.3, -5); g.add(tail);
+  const rotor = new THREE.Mesh(new THREE.BoxGeometry(11, 0.08, 0.7), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+  rotor.position.y = 1.4; g.add(rotor);
+  g.userData.rotor = rotor;
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(10, 38, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  cone.position.y = -20;
+  g.add(cone);
+  const spot = new THREE.SpotLight(0xfff2b0, 1.6, 90, 0.32, 0.5, 0.6);
+  spot.position.set(0, -1, 0);
+  g.add(spot); g.add(spot.target);
+  g.userData.spot = spot;
+  g.visible = false;
+  scene.add(g);
+  return { mesh: g, angle: 0, active: false };
+}
+
+// ---- AI updates ---------------------------------------------------------------
+export function updateTraffic(state, dt, rng) {
+  const p = state.player;
+  for (const car of state.traffic) {
+    if (car.driver !== 'traffic') continue;
+    car.turnCooldown -= dt;
+    const along = car.axis === 'x' ? car.x : car.z;
+    // brake for the car ahead or the player
+    let want = car.targetSpeed;
+    for (const other of state.traffic) {
+      if (other === car || other.axis !== car.axis || other.dir !== car.dir || other.center !== car.center) continue;
+      const gap = (car.axis === 'x' ? other.x - car.x : other.z - car.z) * car.dir;
+      if (gap > 0 && gap < 10) want = Math.min(want, gap < 5 ? 0 : other.speed);
     }
-    // Obstacle braking: anything solid in the front arc slows us down.
-    let blocked = false;
-    if (obstacles) {
-      const fx = this.frontX(), fz = this.frontZ();
-      for (const o of obstacles) {
-        if (o === this) continue;
-        const ox = o.pos ? o.pos.x : o.x, oz = o.pos ? o.pos.z : o.z;
-        if (Math.hypot(ox - fx, oz - fz) < 2.6) { blocked = true; break; }
+    const pGap = (car.axis === 'x' ? p.x - car.x : p.z - car.z) * car.dir;
+    const pLat = Math.abs((car.axis === 'x' ? p.z : p.x) - car.lane);
+    if (pGap > 0 && pGap < 9 && pLat < 3) want = 0;
+    car.speed = clamp(car.speed + (want > car.speed ? 6 : -14) * dt, 0, car.targetSpeed);
+    const step = car.speed * dt * car.dir;
+    if (car.axis === 'x') car.x += step; else car.z += step;
+    // intersection turn
+    if (car.turnCooldown <= 0) {
+      for (const c of CENTERS) {
+        if (Math.abs(along - c) < 1.6 && c !== car.center) {
+          if (rng() < 0.45 || Math.abs(along) > 245) {
+            const newAxis = car.axis === 'x' ? 'z' : 'x';
+            const newDir = Math.abs(along) > 245 ? (along > 0 ? -1 : 1) : (rng() < 0.5 ? 1 : -1);
+            car.center = c;
+            car.axis = newAxis; car.dir = newDir;
+            car.lane = laneCoord(c, newDir, newAxis);
+            car.turnCooldown = 4 + rng() * 5;
+          }
+          break;
+        }
       }
     }
-    const goal = blocked ? 0 : wantSpeed;
-    this.speed += clamp(goal - this.speed, -dt * 22, dt * 9);
-    this.pos.x += Math.sin(this.heading) * this.speed * dt;
-    this.pos.z += Math.cos(this.heading) * this.speed * dt;
-    collide(this.pos, 1.7, colliders);
-    this.mesh.rotation.y = this.heading;
-    const w = this.mesh.userData.wheels;
-    if (w) for (const wh of w) wh.rotation.x += this.speed * dt * 2.6;
-    return blocked;
-  }
-
-  // Traffic brain: cruise the street you are on; at an intersection, maybe
-  // turn. Streets are the grid lines; the car holds a lane offset.
-  updateTraffic(dt, colliders, obstacles) {
-    if (!this.target || Math.hypot(this.target.x - this.pos.x, this.target.z - this.pos.z) < 6) {
-      this.pickTrafficTarget();
+    // hard bounds: turn around at the city edge
+    if (along > CITY_MAX - 6 || along < CITY_MIN + 6) {
+      car.dir *= -1;
+      car.lane = laneCoord(car.center, car.dir, car.axis);
+      car.turnCooldown = 3;
     }
-    this.drive(dt, this.target, this.maxSpeed, colliders, obstacles);
-  }
-  pickTrafficTarget() {
-    const r = this.rng;
-    // Snap to the nearest street line on each axis, then run far along one.
-    const nearStreet = (v) => streetCoord(Math.round(v / WORLD.pitch));
-    const goX = r() < 0.5;
-    if (goX) {
-      const laneZ = nearStreet(this.pos.z) + (this.pos.x > 0 ? -3.4 : 3.4) * (r() < 0.5 ? 1 : -1);
-      this.target = { x: clamp(this.pos.x + rand(r, 120, 300) * (r() < 0.5 ? 1 : -1), -225, 225), z: clamp(laneZ, -222, 222) };
-    } else {
-      const laneX = nearStreet(this.pos.x) + (r() < 0.5 ? -3.4 : 3.4);
-      this.target = { x: clamp(laneX, -222, 222), z: clamp(this.pos.z + rand(r, 120, 300) * (r() < 0.5 ? 1 : -1), -225, 225) };
-    }
-  }
-
-  // Cop brain: hunt the target point, back off if nose-to-nose and stuck.
-  updateCop(dt, colliders, obstacles, targetPos) {
-    this.flashT += dt * 6;
-    const bar = this.mesh.userData.lightbar;
-    if (bar) {
-      const on = Math.sin(this.flashT * 6) > 0;
-      bar.children[0].material.color.setHex(on ? 0xff2a2a : 0x551111);
-      bar.children[1].material.color.setHex(on ? 0x111155 : 0x2a6bff);
-    }
-    const d = Math.hypot(targetPos.x - this.pos.x, targetPos.z - this.pos.z);
-    let goal = this.maxSpeed;
-    if (d < 7) goal = 4; // arrive on scene, don't orbit through the player
-    const blocked = this.drive(dt, targetPos, goal, colliders, obstacles);
-    if (blocked && Math.abs(this.speed) < 0.5) {
-      this.stuckT += dt;
-      if (this.stuckT > 1.4) { // reverse out and re-approach
-        this.pos.x -= Math.sin(this.heading) * 2.2;
-        this.pos.z -= Math.cos(this.heading) * 2.2;
-        this.heading += 0.7;
-        this.stuckT = 0;
-      }
-    } else this.stuckT = 0;
+    if (car.axis === 'x') { car.z = car.lane; car.heading = angleLerp(car.heading, car.dir * Math.PI / 2, 1 - Math.exp(-6 * dt)); }
+    else { car.x = car.lane; car.heading = angleLerp(car.heading, car.dir > 0 ? 0 : Math.PI, 1 - Math.exp(-6 * dt)); }
+    car.mesh.position.set(car.x, 0, car.z);
+    car.mesh.rotation.y = car.heading;
   }
 }
 
-// ------------------------------------------------------------ helicopter ---
-export class Helicopter {
-  constructor(scene) {
-    const THREE = T();
-    const g = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x22242c });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.7, 4.6), bodyMat);
-    g.add(body);
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 8), new THREE.MeshLambertMaterial({ color: 0x8fb6d8 }));
-    nose.position.set(0, -0.1, 2.2); nose.scale.set(1, 0.75, 1); g.add(nose);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4.6), bodyMat);
-    tail.position.set(0, 0.25, -4.2); g.add(tail);
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.2, 0.7), bodyMat);
-    fin.position.set(0, 0.6, -6.4); g.add(fin);
-    this.rotor = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.06, 0.7), new THREE.MeshBasicMaterial({ color: 0x111111 }));
-    this.rotor.position.y = 1.15; g.add(this.rotor);
-    const skidMat = new THREE.MeshLambertMaterial({ color: 0x555a63 });
-    for (const sx of [-0.9, 0.9]) {
-      const skid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3.6), skidMat);
-      skid.position.set(sx, -1.15, 0); g.add(skid);
+export function updatePeds(state, dt, rng, colliders) {
+  const p = state.player;
+  for (const ped of state.peds) {
+    if (ped.state === 'down') continue;
+    ped.walkPhase += dt * (ped.state === 'flee' ? 11 : 6);
+    let moving = false;
+    if (ped.state === 'flee') {
+      ped.fleeT -= dt;
+      const dx = ped.x - state.threat.x, dz = ped.z - state.threat.z;
+      const d = Math.hypot(dx, dz) || 1;
+      ped.tx = ped.x + (dx / d) * 20; ped.tz = ped.z + (dz / d) * 20;
+      if (ped.fleeT <= 0) ped.state = 'walk';
+      moving = true;
+    } else if (ped.role === 'cop') {
+      ped.tx = p.x; ped.tz = p.z; moving = true;
+    } else if (ped.role === 'viper') {
+      moving = ped.state !== 'idle'; // systems.js steers vipers via tx/tz
+    } else if (ped.role === 'npc' || ped.role === 'fare-wait' || ped.role === 'fare-ride') {
+      moving = false; // story characters and taxi fares are driven by systems.js
+    } else {
+      ped.repick -= dt;
+      if (ped.repick <= 0 || dist2(ped.x, ped.z, ped.tx, ped.tz) < 1.2) {
+        ped.repick = 5 + rng() * 8;
+        const cx = CENTERS[Math.floor(rng() * CENTERS.length)];
+        if (rng() < 0.5) { ped.tx = cx + (rng() < 0.5 ? -1 : 1) * (STREET_HALF + 2.6); ped.tz = clamp(ped.z + rand2(rng, -90, 90), -258, 258); }
+        else { ped.tz = CENTERS[Math.floor(rng() * CENTERS.length)] + (rng() < 0.5 ? -1 : 1) * (STREET_HALF + 2.6); ped.tx = clamp(ped.x + rand2(rng, -90, 90), -258, 258); }
+      }
+      moving = true;
     }
-    // Searchlight: a real spotlight plus a visible additive cone.
-    this.spot = new THREE.SpotLight(0xfff3c4, 2.4, 90, 0.30, 0.45, 0.6);
-    this.spot.position.set(0, -0.8, 1.4);
-    g.add(this.spot);
-    g.add(this.spot.target);
-    const coneGeo = new THREE.ConeGeometry(6.5, 30, 20, 1, true);
-    const coneMat = new THREE.MeshBasicMaterial({
-      color: 0xffeebb, transparent: true, opacity: 0.13,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
-    });
-    this.cone = new THREE.Mesh(coneGeo, coneMat);
-    scene.add(this.cone);
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(5.6, 20),
-      new THREE.MeshBasicMaterial({ color: 0xffeebb, transparent: true, opacity: 0.20, blending: THREE.AdditiveBlending, depthWrite: false }));
-    pool.rotation.x = -Math.PI / 2;
-    this.pool = pool;
-    scene.add(pool);
-    this.mesh = g;
-    this.pos = g.position;
-    this.pos.set(260, 60, 0);
-    this.active = false;
-    this.orbit = 0;
-    scene.add(g);
-    this.mesh.visible = false;
-    this.cone.visible = false;
-    this.pool.visible = false;
+    if (moving) {
+      const dx = ped.tx - ped.x, dz = ped.tz - ped.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.3) {
+        const sp = ped.state === 'flee' ? 5.4 : (ped.role === 'cop' ? 6.3 : ped.speed);
+        ped.heading = angleLerp(ped.heading, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt));
+        let nx = ped.x + Math.sin(ped.heading) * sp * dt;
+        let nz = ped.z + Math.cos(ped.heading) * sp * dt;
+        [nx, nz] = collideCircle(nx, nz, 0.45, colliders);
+        ped.x = clamp(nx, -266, 266); ped.z = clamp(nz, -266, 392);
+        ped.mesh.position.y = Math.abs(Math.sin(ped.walkPhase)) * 0.07;
+        if (ped.mesh.userData.legs) ped.mesh.userData.legs.rotation.x = Math.sin(ped.walkPhase) * 0.5;
+      }
+    }
+    if (ped.mesh.userData.markerMesh) ped.mesh.userData.markerMesh.rotation.y += dt * 2.4;
+    ped.mesh.position.x = ped.x; ped.mesh.position.z = ped.z;
+    ped.mesh.rotation.y = ped.heading;
   }
-  setActive(on) {
-    this.active = on;
-    this.mesh.visible = on;
-    this.cone.visible = on;
-    this.pool.visible = on;
+}
+
+function rand2(rng, lo, hi) { return lo + rng() * (hi - lo); }
+
+export function updatePolice(state, dt) {
+  const p = state.player;
+  const px = p.car ? p.car.x : p.x;
+  const pz = p.car ? p.car.z : p.z;
+  for (const cop of state.police) {
+    const d = dist2(cop.x, cop.z, px, pz);
+    if (d > 260) { // respawn nearer, at a street behind the player
+      cop.x = px + (Math.random() - 0.5) * 90;
+      cop.z = pz + (Math.random() - 0.5) * 90;
+      cop.speed = 0;
+    }
+    const want = Math.atan2(px - cop.x, pz - cop.z);
+    const diff = ((want - cop.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    cop.heading += clamp(diff, -2.4 * dt, 2.4 * dt);
+    const topSpeed = p.car ? 27 : 17;
+    cop.speed = clamp(cop.speed + (d > 7 ? 14 : -6) * dt, 0, topSpeed);
+    cop.x += Math.sin(cop.heading) * cop.speed * dt;
+    cop.z += Math.cos(cop.heading) * cop.speed * dt;
+    cop.x = clamp(cop.x, -272, 272); cop.z = clamp(cop.z, -272, 396);
+    cop.mesh.position.set(cop.x, 0, cop.z);
+    cop.mesh.rotation.y = cop.heading;
+    const bar = cop.mesh.userData.lightbar;
+    if (bar) bar.children[0].material.color.setHex(Math.floor(state.time * 6) % 2 ? 0xff2a2a : 0x550000);
+    if (bar) bar.children[1].material.color.setHex(Math.floor(state.time * 6) % 2 ? 0x5500ff : 0x2a6aff);
   }
-  update(dt, t, targetPos) {
-    if (!this.active) return;
-    this.rotor.rotation.y += dt * 28;
-    this.orbit += dt * 0.35;
-    const R = 17;
-    const wx = targetPos.x + Math.cos(this.orbit) * R;
-    const wz = targetPos.z + Math.sin(this.orbit) * R;
-    this.pos.x += (wx - this.pos.x) * clamp(dt * 1.6, 0, 1);
-    this.pos.z += (wz - this.pos.z) * clamp(dt * 1.6, 0, 1);
-    this.pos.y = 27 + Math.sin(t * 0.9) * 1.4;
-    this.mesh.rotation.y = Math.atan2(targetPos.x - this.pos.x, targetPos.z - this.pos.z);
-    this.mesh.rotation.z = Math.sin(this.orbit * 2) * 0.06;
-    // Aim the light + cone at the target.
-    this.spot.target.position.copy(this.mesh.worldToLocal(new (T()).Vector3(targetPos.x, 0, targetPos.z)));
-    const mid = new (T()).Vector3((this.pos.x + targetPos.x) / 2, this.pos.y / 2, (this.pos.z + targetPos.z) / 2);
-    this.cone.position.copy(mid);
-    this.cone.lookAt(targetPos.x, 0, targetPos.z);
-    this.cone.rotateX(-Math.PI / 2);
-    this.cone.scale.y = this.pos.y / 30;
-    this.pool.position.set(targetPos.x, 0.25, targetPos.z);
-  }
+}
+
+export function updateHeli(state, dt) {
+  const h = state.heli;
+  if (!h) return;
+  const p = state.player;
+  const px = p.car ? p.car.x : p.x;
+  const pz = p.car ? p.car.z : p.z;
+  h.active = state.wanted >= 3;
+  h.mesh.visible = h.active;
+  if (!h.active) return;
+  h.angle += dt * 0.45;
+  const hx = px + Math.sin(h.angle) * 24;
+  const hz = pz + Math.cos(h.angle) * 24;
+  h.mesh.position.set(hx, 33, hz);
+  h.mesh.rotation.y = h.angle + Math.PI / 2;
+  h.mesh.userData.rotor.rotation.y += dt * 28;
+  const spot = h.mesh.userData.spot;
+  spot.target.position.set(px - hx, -33, pz - hz);
+  spot.target.updateMatrixWorld();
 }

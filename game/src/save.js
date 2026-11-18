@@ -1,44 +1,39 @@
-// save.js — the persistent profile. Costa Verde keeps exactly one save in
-// localStorage: cash on hand, how far the story has progressed, the best
-// Sunset GP time and lifetime earnings. Everything is defensive: a corrupt or
-// missing save quietly becomes a fresh profile instead of breaking the game.
+// save.js — localStorage persistence for Costa Verde: cash, story progress,
+// player position, best race time. Everything is best-effort: a private-mode
+// browser that refuses storage simply plays a fresh game.
 
-const KEY = 'costaverde-save-v1';
+const KEY = 'costa-verde-save-v1';
 
-export const freshProfile = () => ({
-  money: 250,          // cab fare and a sandwich: what you land with
-  jobIndex: 0,         // next story job to offer (0..7, 7 = campaign complete)
-  raceBest: 0,         // seconds, 0 = never finished
-  totalEarned: 0,
-  faresDone: 0,
-  timesBusted: 0,
-});
-
-export function loadProfile() {
+export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return freshProfile();
+    if (!raw) return null;
     const data = JSON.parse(raw);
-    const base = freshProfile();
-    for (const k of Object.keys(base)) {
-      if (typeof data[k] === 'number' && Number.isFinite(data[k])) base[k] = data[k];
-    }
-    base.jobIndex = Math.max(0, Math.min(7, Math.floor(base.jobIndex)));
-    return base;
-  } catch {
-    return freshProfile();
-  }
+    if (typeof data !== 'object' || data === null) return null;
+    return {
+      cash: Number.isFinite(data.cash) ? data.cash : 120,
+      jobIndex: Number.isFinite(data.jobIndex) ? data.jobIndex : 0,
+      x: Number.isFinite(data.x) ? data.x : 0,
+      z: Number.isFinite(data.z) ? data.z : 40,
+      bestRace: Number.isFinite(data.bestRace) ? data.bestRace : 0,
+      fares: Number.isFinite(data.fares) ? data.fares : 0,
+    };
+  } catch { return null; }
 }
 
-export function storeProfile(profile) {
+export function storeSave(state) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(profile));
-  } catch {
-    /* private mode / quota: the game simply runs unsaved */
-  }
+    localStorage.setItem(KEY, JSON.stringify({
+      cash: Math.round(state.cash),
+      jobIndex: state.jobIndex,
+      x: Math.round(state.player.x * 10) / 10,
+      z: Math.round(state.player.z * 10) / 10,
+      bestRace: state.bestRace || 0,
+      fares: state.fares || 0,
+    }));
+  } catch { /* storage unavailable: play on unsaved */ }
 }
 
-export function wipeProfile() {
+export function clearSave() {
   try { localStorage.removeItem(KEY); } catch { /* ignore */ }
-  return freshProfile();
 }
