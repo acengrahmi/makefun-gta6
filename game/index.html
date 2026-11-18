@@ -1,127 +1,91 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Costa Verde — an open-world crime story</title>
+<title>Costa Verde — Sunset Boulevard</title>
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; background:#1a0f24; font-family:'Segoe UI', Arial, sans-serif; }
-  #game { position:fixed; inset:0; }
-  canvas.webgl { display:block; }
-  .hud { position:fixed; z-index:5; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.55); }
-  #top-left { top:14px; left:16px; }
-  #cash { font-size:30px; font-weight:800; color:#7dff8a; letter-spacing:.5px; }
-  #place { font-size:12px; letter-spacing:3px; color:#ffd9a0; margin-top:1px; }
-  #health-wrap { width:190px; height:9px; background:rgba(0,0,0,.45); border-radius:5px; margin-top:7px; overflow:hidden; }
-  #health-fill { height:100%; width:100%; background:linear-gradient(90deg,#ffb347,#ff7847); transition:width .2s; }
-  #top-right { top:14px; right:16px; text-align:right; }
-  #wanted-label { font-size:11px; letter-spacing:3px; color:#ffd9a0; }
-  #stars { font-size:24px; color:#ffd76a; line-height:1.1; }
-  #heat-wrap { width:130px; height:5px; background:rgba(0,0,0,.45); border-radius:3px; margin:4px 0 0 auto; overflow:hidden; }
-  #heat-fill { height:100%; width:0%; background:#ff5040; }
-  #objective { top:12px; left:50%; transform:translateX(-50%); width:min(620px,72vw); text-align:center;
-    background:rgba(24,12,34,.78); border:1.5px solid rgba(255,183,71,.85); border-radius:12px; padding:8px 18px 9px; transition:opacity .2s; }
-  #obj-title { color:#ffd76a; font-weight:700; letter-spacing:2.5px; font-size:14.5px; }
-  #obj-text { font-size:15.5px; margin-top:2px; }
-  #obj-dist { color:#ffd76a; font-weight:700; font-size:13px; margin-left:8px; }
-  #dialogue { left:50%; transform:translateX(-50%); bottom:86px; width:min(680px,86vw);
-    background:rgba(16,10,26,.88); border-left:4px solid #ffb347; border-radius:10px; padding:13px 18px 11px; display:none; }
-  #dlg-name { color:#ffd76a; font-weight:700; letter-spacing:2.5px; font-size:13px; }
-  #dlg-text { font-size:16.5px; line-height:1.45; margin-top:3px; }
-  #dlg-hint { color:#cbb; font-size:11.5px; margin-top:6px; letter-spacing:1px; }
-  #banner { top:24%; left:50%; transform:translateX(-50%); text-align:center; display:none; width:min(700px,90vw); pointer-events:none; }
-  #banner-title { font-size:44px; font-weight:900; letter-spacing:6px; color:#ffd76a; text-shadow:0 3px 14px rgba(0,0,0,.7); }
-  #banner-text { font-size:19px; margin-top:4px; text-shadow:0 2px 8px rgba(0,0,0,.8); }
-  #banner-sub { font-size:14.5px; color:#ffe2b8; margin-top:3px; font-style:italic; }
-  #radio { bottom:64px; left:16px; max-width:400px; background:rgba(16,10,26,.75); border-radius:8px;
-    padding:7px 12px; font-size:13.5px; color:#ffe2b8; display:none; }
-  #minimap-wrap { left:16px; bottom:44px; width:168px; height:168px; border-radius:50%; overflow:hidden;
-    border:2.5px solid rgba(255,215,106,.75); box-shadow:0 4px 18px rgba(0,0,0,.5); }
-  #speed { right:22px; bottom:52px; text-align:right; display:none; }
-  #speed-num { font-size:52px; font-weight:900; line-height:.95; }
-  #speed-unit { font-size:12px; letter-spacing:3px; color:#ffd9a0; }
-  #footer { bottom:10px; left:50%; transform:translateX(-50%); background:rgba(16,10,26,.72); border-radius:8px;
-    padding:6px 16px; font-size:12.5px; color:#e8ddcf; white-space:nowrap; }
-  #footer b { color:#ffd76a; }
-  #hurt { inset:0; background:radial-gradient(ellipse at center, transparent 55%, rgba(255,30,20,.55) 100%); opacity:0; pointer-events:none; transition:opacity .15s; }
-  #paused { top:40%; left:50%; transform:translate(-50%,-50%); font-size:34px; font-weight:800; letter-spacing:5px; display:none; }
-  /* ------- title screen ------- */
-  #title { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; }
-  #title-card { text-align:center; max-width:760px; width:88vw; background:rgba(18,8,28,.66); border:1.5px solid rgba(255,183,71,.7);
-    border-radius:18px; padding:34px 44px 28px; backdrop-filter:blur(3px); box-shadow:0 18px 60px rgba(0,0,0,.55); }
-  #title h1 { margin:0; font-size:74px; font-weight:900; letter-spacing:8px;
-    background:linear-gradient(180deg,#ffe9a8,#ffb347 55%,#ff7847); -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 0 34px rgba(255,150,60,.25); }
-  #title .sub { color:#8ef0dd; letter-spacing:6px; font-size:15px; margin-top:2px; }
-  #title .pitch { color:#ffd76a; letter-spacing:3.5px; font-weight:700; font-size:15.5px; margin-top:14px; }
-  #title .blurb { color:#f4e9dc; font-size:15.5px; line-height:1.55; margin:14px auto 4px; max-width:640px; }
-  #title .blurb b { color:#ffd76a; }
-  #title .controls { color:#d8cbb8; font-size:13px; line-height:1.9; margin-top:10px; }
-  #title .controls b { color:#ffd76a; }
-  #start-btn { margin-top:18px; font-size:19px; font-weight:800; letter-spacing:3px; color:#2a1400;
-    background:linear-gradient(180deg,#ffd76a,#ff9a3c); border:none; border-radius:10px; padding:13px 46px; cursor:pointer;
-    box-shadow:0 6px 24px rgba(255,150,60,.45); }
-  #start-btn:hover { filter:brightness(1.08); }
-  #title .fine { color:#bfae99; font-size:12px; margin-top:14px; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1024; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+  #hud-top { position: absolute; top: 14px; left: 18px; right: 18px; display: flex; justify-content: space-between; align-items: flex-start; }
+  #hud-money { font-size: 30px; font-weight: 800; color: #7dff5e; text-shadow: 0 2px 8px rgba(0,0,0,.65); letter-spacing: .5px; }
+  #hud-health { width: 190px; height: 10px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; margin-top: 6px; overflow: hidden; }
+  #hud-health-fill { height: 100%; width: 100%; background: #7dff5e; transition: width .15s; }
+  #hud-right { text-align: right; }
+  #hud-stars { font-size: 26px; color: #ffd23e; text-shadow: 0 2px 8px rgba(0,0,0,.7); letter-spacing: 3px; opacity: .25; }
+  #hud-timer { font-size: 22px; font-weight: 700; color: #ffe9b0; text-shadow: 0 2px 6px rgba(0,0,0,.7); opacity: 0; margin-top: 2px; }
+  #hud-objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: 52%;
+    background: rgba(10,10,18,.55); border: 1px solid rgba(255,210,62,.5); border-radius: 8px; padding: 7px 16px;
+    font-size: 16px; font-weight: 600; color: #ffe9b0; text-align: center; opacity: 0; transition: opacity .25s; }
+  #minimap { position: absolute; right: 18px; bottom: 18px; width: 148px; height: 148px; border: 2px solid rgba(255,255,255,.35);
+    border-radius: 10px; background: #141a24; opacity: .92; }
+  #hud-hint { position: absolute; bottom: 178px; right: 18px; width: 148px; text-align: center; font-size: 13px;
+    color: #ffe9b0; text-shadow: 0 1px 4px #000; opacity: 0; transition: opacity .2s; }
+  /* ---------- dialogue ---------- */
+  #dialogue { position: absolute; left: 50%; bottom: 34px; transform: translate(-50%, 12px); width: min(680px, 86vw);
+    background: linear-gradient(180deg, rgba(16,12,26,.88), rgba(16,12,26,.94)); border: 1px solid rgba(255,93,162,.55);
+    border-left: 5px solid #ff5da2; border-radius: 10px; padding: 13px 18px 11px; opacity: 0; transition: all .22s; }
+  #dialogue-name { color: #ff8ac2; font-weight: 800; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 3px; }
+  #dialogue-text { font-size: 19px; line-height: 1.35; color: #fff; }
+  #dialogue-next { color: rgba(255,255,255,.55); font-size: 12px; margin-top: 5px; letter-spacing: 1px; }
+  /* ---------- banner + toast ---------- */
+  #banner { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(.94); text-align: center;
+    opacity: 0; transition: all .25s; }
+  #banner-title { font-size: 54px; font-weight: 900; letter-spacing: 3px; color: #ffd23e;
+    text-shadow: 0 0 22px rgba(255,120,60,.8), 0 3px 10px rgba(0,0,0,.8); }
+  #banner-sub { font-size: 21px; font-weight: 700; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.85); margin-top: 2px; }
+  #toast { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); background: rgba(10,10,18,.72);
+    border-radius: 8px; padding: 8px 18px; font-size: 16px; font-weight: 600; color: #ffe9b0; opacity: 0; transition: opacity .25s; }
+  /* ---------- title ---------- */
+  #title { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(20,8,30,.18) 0%, rgba(20,8,30,.0) 40%, rgba(20,8,30,.55) 100%); color: #fff; text-align: center; }
+  #title h1 { font-size: 92px; margin: 0; font-weight: 900; letter-spacing: 6px; line-height: .95;
+    background: linear-gradient(180deg, #ffe9b0 15%, #ff9a3c 55%, #ff5da2 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 18px rgba(255,110,60,.45)); }
+  #title h2 { font-size: 34px; margin: 2px 0 10px; font-weight: 300; letter-spacing: 14px; color: #ffd9ec; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  #title-pitch { font-size: 19px; font-weight: 800; letter-spacing: 4px; color: #ffe9b0; text-shadow: 0 2px 10px rgba(0,0,0,.75); }
+  #title-sub { margin-top: 26px; font-size: 16px; color: rgba(255,255,255,.85); text-shadow: 0 1px 6px #000; }
+  #title-controls { margin-top: 8px; font-size: 13px; color: rgba(255,255,255,.55); letter-spacing: 1px; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 180px rgba(20,0,10,.55); }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
-<div id="game"></div>
-
-<div class="hud" id="top-left">
-  <div id="cash">$0</div>
-  <div id="place">SUNSET BOULEVARD</div>
-  <div id="health-wrap"><div id="health-fill"></div></div>
-</div>
-<div class="hud" id="top-right">
-  <div id="wanted-label">WANTED</div>
-  <div id="stars">☆☆☆☆☆</div>
-  <div id="heat-wrap"><div id="heat-fill"></div></div>
-</div>
-<div class="hud" id="objective">
-  <span id="obj-title">COSTA VERDE</span>
-  <div><span id="obj-text"></span><span id="obj-dist"></span></div>
-</div>
-<div class="hud" id="dialogue">
-  <div id="dlg-name"></div>
-  <div id="dlg-text"></div>
-  <div id="dlg-hint">F ▸ continue</div>
-</div>
-<div class="hud" id="banner">
-  <div id="banner-title"></div>
-  <div id="banner-text"></div>
-  <div id="banner-sub"></div>
-</div>
-<div class="hud" id="radio"></div>
-<div class="hud" id="minimap-wrap"><canvas id="minimap" width="168" height="168"></canvas></div>
-<div class="hud" id="speed"><div id="speed-num">0</div><div id="speed-unit">KM/H</div></div>
-<div class="hud" id="footer"><b>WASD</b> move / drive · <b>Mouse</b> look · <b>E</b> enter / exit car · <b>Click</b> shoot · <b>Shift</b> sprint · <b>Space</b> brake · <b>T</b> next job · <b>F</b> dialogue · <b>P</b> pause · <b>M</b> music</div>
-<div class="hud" id="hurt"></div>
-<div class="hud" id="paused">PAUSED</div>
-
-<div id="title">
-  <div id="title-card">
-    <h1>COSTA VERDE</h1>
-    <div class="sub">AN OPEN-WORLD CRIME STORY</div>
-    <div class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
-    <p class="blurb">Rico Santana rolls into Costa Verde at golden hour with an empty wallet and a reputation to build.
-      Fixer <b>Lena Cruz</b>, garage boss <b>Sal Bianchi</b>, boat captain <b>Mateo Reyes</b> and one cop who shouldn't be
-      helping him — <b>Officer Dana Ruiz</b> — have seven jobs that will make him rich, or busted. Steal any car, run the
-      jobs, race the Sunset GP, work taxi fares — and when the third star lights up, watch the sky: the police helicopter is coming.</p>
-    <div class="controls"><b>WASD</b> — move / drive · <b>Mouse</b> — look · <b>E</b> — enter / exit car · <b>Click</b> — shoot · <b>Shift</b> — sprint · <b>Space</b> — brake · <b>T</b> — next job · <b>F</b> — dialogue · <b>P</b> — pause · <b>M</b> — music</div>
-    <button id="start-btn">START ENGINE</button>
-    <div class="fine">Original game. No real city, person or car is copied. Runs fully offline.</div>
+<canvas id="game" aria-label="Costa Verde: a golden-hour open-world crime game"></canvas>
+<div id="vignette"></div>
+<div id="hud">
+  <div id="hud-top">
+    <div>
+      <div id="hud-money">$250</div>
+      <div id="hud-health"><div id="hud-health-fill"></div></div>
+    </div>
+    <div id="hud-right">
+      <div id="hud-stars">☆☆☆☆☆</div>
+      <div id="hud-timer"></div>
+    </div>
   </div>
+  <div id="hud-objective"></div>
+  <canvas id="minimap" width="148" height="148"></canvas>
+  <div id="hud-hint"></div>
+  <div id="dialogue">
+    <div id="dialogue-name"></div>
+    <div id="dialogue-text"></div>
+    <div id="dialogue-next">E ▸</div>
+  </div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="toast"></div>
 </div>
-
-<script src="vendor/three.min.js"></script>
-<script src="src/util.js"></script>
-<script src="src/city.js"></script>
-<script src="src/actors.js"></script>
-<script src="src/systems.js"></script>
-<script src="src/hud.js"></script>
-<script src="src/audio.js"></script>
-<script src="src/save.js"></script>
-<script src="src/main.js"></script>
+<div id="title">
+  <h1>COSTA VERDE</h1>
+  <h2>SUNSET BOULEVARD</h2>
+  <div id="title-pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
+  <div id="title-sub">Click to play</div>
+  <div id="title-controls">WASD move &amp; drive · E interact / enter car · F shoot · Shift run · Space handbrake · P pause</div>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
