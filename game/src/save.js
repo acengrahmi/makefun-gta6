@@ -1,33 +1,44 @@
-// Costa Verde — localStorage save: cash, story progress, position, race best.
-(function () {
-  'use strict';
-  const CV = (window.CV = window.CV || {});
-  const KEY = 'costaverde-save-v1';
+// save.js — the persistent profile. Costa Verde keeps exactly one save in
+// localStorage: cash on hand, how far the story has progressed, the best
+// Sunset GP time and lifetime earnings. Everything is defensive: a corrupt or
+// missing save quietly becomes a fresh profile instead of breaking the game.
 
-  CV.save = {
-    data: null,
-    load() {
-      let d = null;
-      try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
-      if (!d || typeof d !== 'object') {
-        d = { cash: 0, nextJob: 0, jobsDone: 0, x: 150, z: 60, bestRace: 0, fares: 0, racesWon: 0 };
-      }
-      // Clamp anything odd an older save might hold.
-      d.cash = Math.max(0, Math.floor(+d.cash || 0));
-      d.nextJob = Math.min(7, Math.max(0, Math.floor(+d.nextJob || 0)));
-      d.jobsDone = Math.max(0, Math.floor(+d.jobsDone || 0));
-      d.x = Math.max(-280, Math.min(280, +d.x || 150));
-      d.z = Math.max(-280, Math.min(280, +d.z || 60));
-      d.bestRace = Math.max(0, +d.bestRace || 0);
-      this.data = d;
-      return d;
-    },
-    write() {
-      try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { /* private mode */ }
-    },
-    reset() {
-      try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
-      return this.load();
-    },
-  };
-})();
+const KEY = 'costaverde-save-v1';
+
+export const freshProfile = () => ({
+  money: 250,          // cab fare and a sandwich: what you land with
+  jobIndex: 0,         // next story job to offer (0..7, 7 = campaign complete)
+  raceBest: 0,         // seconds, 0 = never finished
+  totalEarned: 0,
+  faresDone: 0,
+  timesBusted: 0,
+});
+
+export function loadProfile() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return freshProfile();
+    const data = JSON.parse(raw);
+    const base = freshProfile();
+    for (const k of Object.keys(base)) {
+      if (typeof data[k] === 'number' && Number.isFinite(data[k])) base[k] = data[k];
+    }
+    base.jobIndex = Math.max(0, Math.min(7, Math.floor(base.jobIndex)));
+    return base;
+  } catch {
+    return freshProfile();
+  }
+}
+
+export function storeProfile(profile) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(profile));
+  } catch {
+    /* private mode / quota: the game simply runs unsaved */
+  }
+}
+
+export function wipeProfile() {
+  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+  return freshProfile();
+}
