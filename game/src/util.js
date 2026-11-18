@@ -1,82 +1,49 @@
-// Shared helpers: seeded random, math, and procedural canvas textures.
-// Everything the city and cars wear is drawn here at runtime — no image files.
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function random() {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Costa Verde — shared utilities: math, RNG, DOM helpers.
+window.CV = window.CV || {};
 
-export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-export const lerp = (a, b, t) => a + (b - a) * t;
-export const rand = (rng, lo, hi) => lo + rng() * (hi - lo);
-export const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
-export function angleLerp(a, b, t) {
-  let d = (b - a) % (Math.PI * 2);
-  if (d > Math.PI) d -= Math.PI * 2;
-  if (d < -Math.PI) d += Math.PI * 2;
-  return a + d * t;
-}
-export function dist2D(ax, az, bx, bz) {
-  const dx = ax - bx, dz = az - bz;
-  return Math.sqrt(dx * dx + dz * dz);
-}
+CV.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+CV.lerp = (a, b, t) => a + (b - a) * t;
+CV.dist2 = (ax, az, bx, bz) => { const dx = ax - bx, dz = az - bz; return dx * dx + dz * dz; };
+CV.dist = (ax, az, bx, bz) => Math.sqrt(CV.dist2(ax, az, bx, bz));
+CV.angLerp = (a, b, t) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
+CV.rand = (a, b) => a + Math.random() * (b - a);
+CV.randi = (a, b) => Math.floor(CV.rand(a, b + 1));
+CV.pick = arr => arr[Math.floor(Math.random() * arr.length)];
+CV.el = id => document.getElementById(id);
+CV.makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
 
-/** Draw a building facade (warm plaster + lit windows) and return a THREE texture.
- * It is golden hour in Costa Verde, so most windows burn warm against the dusk. */
-export function makeFacadeTexture(base, lit, floors, cols, rng) {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = base; g.fillRect(0, 0, 128, 256);
-  g.fillStyle = 'rgba(0,0,0,0.18)';
-  g.fillRect(0, 0, 128, 10);
-  const ww = 128 / cols, wh = 256 / floors;
-  for (let f = 0; f < floors; f += 1) {
-    for (let k = 0; k < cols; k += 1) {
-      const on = rng() < 0.62;
-      g.fillStyle = on ? lit : 'rgba(38,34,52,0.92)';
-      g.fillRect(4 + k * ww, 8 + f * wh + 4, ww - 8, wh - 10);
-      if (on && rng() < 0.5) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(4 + k * ww, 8 + f * wh + 4, ww - 8, 3); }
+// World constants shared by every module.
+CV.WORLD = {
+  pitch: 44,          // building plot (30) + road (14)
+  half: 4,            // blocks from -4..4 on each axis (9x9)
+  shoreX: -212,       // where the sand starts (west edge of the city)
+  seaLevel: 0.55,     // sea plane height — ABOVE the ground plane at 0
+  groundY: 0,
+};
+CV.blockCenter = i => (i - CV.WORLD.half) * CV.WORLD.pitch; // i in 0..8
+CV.roadLine = i => CV.blockCenter(i) + CV.WORLD.pitch / 2;   // road centre between plots
+
+// Circle (x,z,r) vs the building colliders registered by city.js.
+CV.collideCircle = (x, z, r) => {
+  const cols = CV.colliders || [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    const nx = CV.clamp(x, c.minX, c.maxX), nz = CV.clamp(z, c.minZ, c.maxZ);
+    const dx = x - nx, dz = z - nz, d2 = dx * dx + dz * dz;
+    if (d2 < r * r) {
+      if (d2 > 1e-6) { const d = Math.sqrt(d2); x = nx + (dx / d) * r; z = nz + (dz / d) * r; }
+      else { // centre inside the box: push out along the smallest penetration
+        const pl = x - c.minX, pr = c.maxX - x, pt = z - c.minZ, pb = c.maxZ - z;
+        const m = Math.min(pl, pr, pt, pb);
+        if (m === pl) x = c.minX - r; else if (m === pr) x = c.maxX + r;
+        else if (m === pt) z = c.minZ - r; else z = c.maxZ + r;
+      }
     }
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** Asphalt strip with a dashed centre line, tiled along its length. */
-export function makeRoadTexture() {
-  const c = document.createElement('canvas');
-  c.width = 64; c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = '#33363d'; g.fillRect(0, 0, 64, 128);
-  g.fillStyle = '#3d4048';
-  for (let i = 0; i < 160; i += 1) g.fillRect(Math.random() * 64, Math.random() * 128, 2, 2);
-  g.fillStyle = '#e8c33a'; g.fillRect(30, 8, 4, 44);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** Warm sand / pavement ground texture with subtle noise and tile seams. */
-export function makeGroundTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#cf9a68';
-  g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 1200; i += 1) {
-    g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)';
-    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(24, 24);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
+  return [x, z];
+};
+CV.insideCollider = (x, z) => {
+  const cols = CV.colliders || [];
+  for (let i = 0; i < cols.length; i++) { const c = cols[i]; if (x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true; }
+  return false;
+};

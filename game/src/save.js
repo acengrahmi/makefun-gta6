@@ -1,36 +1,24 @@
-// Save / load through localStorage: money, missions, health and position.
-// The game also autosaves after every completed mission.
-const KEY = 'costaverde-save-v1';
-
-export function loadSave() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (typeof data.money !== 'number' || typeof data.missionIndex !== 'number') return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-export function writeSave(state) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify({
-      money: state.money,
-      missionIndex: state.missionIndex,
-      missionsDone: state.missionsDone,
-      health: state.health,
-      x: state.x,
-      z: state.z,
-      savedAt: Date.now(),
-    }));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function clearSave() {
-  try { localStorage.removeItem(KEY); } catch { /* storage unavailable */ }
-}
+// Costa Verde — localStorage save: cash, story progress, position.
+CV.save = {
+  KEY: 'costa-verde-save-v1',
+  data: { cash: 0, jobIndex: 0, px: 150, pz: 176 },
+  load() {
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && typeof d === 'object') {
+          this.data.cash = CV.clamp(Math.floor(+d.cash) || 0, 0, 99999999);
+          this.data.jobIndex = CV.clamp(Math.floor(+d.jobIndex) || 0, 0, 7); // clamp old saves
+          if (isFinite(+d.px)) this.data.px = CV.clamp(+d.px, -260, 260);
+          if (isFinite(+d.pz)) this.data.pz = CV.clamp(+d.pz, -260, 260);
+        }
+      }
+    } catch (e) { /* fresh save */ }
+    return this.data;
+  },
+  store() {
+    try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) { /* private mode */ }
+  },
+  wipe() { try { localStorage.removeItem(this.KEY); } catch (e) {} this.data = { cash: 0, jobIndex: 0, px: 150, pz: 176 }; },
+};
