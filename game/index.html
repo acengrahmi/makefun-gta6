@@ -1,112 +1,112 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Costa Verde — Open World</title>
+<title>Costa Verde — an open-world crime story</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1626;
-    font-family: "Trebuchet MS", Verdana, sans-serif; color: #fff; }
-  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  .hud { position: fixed; z-index: 5; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,.7); }
-  #moneyBox { top: 14px; left: 16px; font-size: 26px; font-weight: bold; color: #7dff9a; }
-  #moneyBox small { display: block; font-size: 13px; color: #ffe9a8; letter-spacing: 1px; }
-  #healthWrap { margin-top: 6px; width: 190px; height: 12px; background: rgba(0,0,0,.55);
-    border: 1px solid rgba(255,255,255,.5); border-radius: 6px; overflow: hidden; }
-  #healthBar { height: 100%; width: 100%; background: linear-gradient(90deg,#ff5f4d,#ffb84d); }
-  #wanted { top: 14px; right: 34px; font-size: 30px; letter-spacing: 4px; color: #ffd94d;
-    text-align: right; }
-  #wanted .off { color: rgba(255,255,255,.28); }
-  #wantedLabel { font-size: 11px; letter-spacing: 3px; color: #fff; display: block; }
-  #objective { top: 14px; left: 50%; transform: translateX(-50%); width: 460px; max-width: 60vw;
-    text-align: center; background: rgba(0,0,0,.55); border: 1px solid rgba(255,220,120,.6);
-    border-radius: 8px; padding: 8px 12px; font-size: 15px; }
-  #objective b { color: #ffd94d; display: block; font-size: 12px; letter-spacing: 2px; }
-  #minimapBox { left: 16px; bottom: 16px; border: 2px solid rgba(255,255,255,.65);
-    border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px rgba(0,0,0,.4); background: #0e1a24; }
-  #minimap { display: block; }
-  #speedBox { right: 34px; bottom: 16px; text-align: right; font-size: 34px; font-weight: bold; }
-  #speedBox small { display: block; font-size: 12px; letter-spacing: 2px; color: #ffe9a8; }
-  #crosshair { left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 22px; color: #fff;
-    display: none; }
-  #toast { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 19px; font-weight: bold;
-    color: #ffe9a8; text-align: center; white-space: nowrap; }
-  #dialogue { left: 50%; bottom: 118px; transform: translateX(-50%); width: 600px; max-width: 86vw;
-    background: rgba(12,8,16,.82); border-left: 5px solid #ffb52e; border-radius: 6px;
-    padding: 10px 16px 12px; display: none; }
-  #dialogueWho { font-size: 12px; font-weight: bold; letter-spacing: 3px; color: #ffb52e; }
-  #dialogueText { font-size: 17px; line-height: 1.45; color: #fff6e8; margin-top: 2px; }
-  #hint { left: 50%; bottom: 24px; transform: translateX(-50%); font-size: 13px; color: #e8f2ff;
-    background: rgba(0,0,0,.45); padding: 5px 10px; border-radius: 6px; white-space: nowrap; }
-  #damage { position: fixed; inset: 0; z-index: 4; pointer-events: none;
-    box-shadow: inset 0 0 90px 30px rgba(255,0,0,.55); opacity: 0; transition: opacity .15s; }
-  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
-    justify-content: center; background: linear-gradient(160deg, rgba(26,10,30,.84), rgba(96,30,14,.78));
-    backdrop-filter: blur(2px); }
-  .panel .pitch { font-size: 14px; font-weight: bold; letter-spacing: 3px; color: #ffb52e;
-    margin: 2px 0 10px; }
-  .panel { max-width: 640px; width: 92vw; text-align: center; padding: 28px 30px;
-    background: rgba(0,0,0,.45); border: 1px solid rgba(255,220,120,.5); border-radius: 14px; }
-  .panel h1 { margin: 0 0 4px; font-size: 52px; letter-spacing: 4px; color: #ffd94d;
-    text-shadow: 0 3px 0 #c25e00, 0 6px 18px rgba(0,0,0,.8); }
-  .panel h2 { margin: 0 0 14px; font-size: 15px; letter-spacing: 6px; color: #7dff9a; font-weight: normal; }
-  .panel p { font-size: 15px; line-height: 1.55; color: #f2f6ff; margin: 8px 0; }
-  .panel .controls { font-size: 13px; color: #cfe3ff; line-height: 1.8; }
-  .panel button { pointer-events: auto; cursor: pointer; margin: 10px 6px 0; padding: 12px 26px;
-    font-size: 17px; font-weight: bold; letter-spacing: 1px; color: #231303;
-    background: linear-gradient(180deg,#ffd94d,#ff9d2e); border: 0; border-radius: 9px;
-    box-shadow: 0 4px 0 #a35c00; }
-  .panel button:hover { filter: brightness(1.1); }
-  .panel button.ghost { background: rgba(255,255,255,.16); color: #fff; box-shadow: none;
-    border: 1px solid rgba(255,255,255,.5); }
-  #banner { left: 50%; top: 34%; transform: translate(-50%,-50%); text-align: center; display: none; }
-  #banner h1 { margin: 0; font-size: 46px; color: #ffd94d; text-shadow: 0 3px 0 #c25e00, 0 6px 20px #000; }
-  #banner p { margin: 6px 0 0; font-size: 20px; color: #fff; }
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  html, body { margin:0; padding:0; overflow:hidden; background:#1a1024; font-family:'Segoe UI', system-ui, sans-serif; color:#fff; }
+  #game-wrap, #game-wrap canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hud { position:fixed; z-index:5; pointer-events:none; }
+  #hud-top-left { top:14px; left:16px; }
+  #hud-cash { font-size:30px; font-weight:800; color:#7be495; text-shadow:0 2px 6px rgba(0,0,0,.55); line-height:1; }
+  #hud-place { font-size:12px; letter-spacing:3px; color:#ffe1ae; margin-top:3px; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  #hud-health { width:190px; height:11px; background:rgba(0,0,0,.45); border-radius:6px; margin-top:7px; overflow:hidden; }
+  #hud-health-fill { height:100%; width:100%; background:linear-gradient(90deg,#ff9a3d,#ffd94d); transition:width .2s; }
+  #hud-stars-wrap { top:12px; right:18px; text-align:right; }
+  #hud-wanted-label { font-size:11px; letter-spacing:4px; color:#ffe1ae; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  #hud-stars { font-size:27px; color:rgba(255,255,255,.35); text-shadow:0 2px 6px rgba(0,0,0,.5); line-height:1.15; }
+  #hud-objective { top:14px; left:50%; transform:translateX(-50%); width:min(560px,72vw); background:rgba(24,14,26,.78);
+    border:1.5px solid rgba(255,217,77,.75); border-radius:10px; padding:8px 18px 9px; text-align:center; display:none; }
+  #hud-obj-title { font-size:14.5px; font-weight:700; letter-spacing:2.5px; color:#ffd94d; }
+  #hud-obj-sub { font-size:15.5px; margin-top:2px; color:#fff; }
+  #hud-dialogue { left:50%; bottom:118px; transform:translateX(-50%); width:min(640px,86vw); background:rgba(16,12,20,.88);
+    border-left:4px solid #ffd94d; border-radius:8px; padding:12px 18px; display:none; }
+  #dlg-name { font-size:12.5px; font-weight:800; letter-spacing:3px; color:#ffd94d; margin-bottom:4px; }
+  #dlg-text { font-size:17px; line-height:1.35; }
+  #hud-radio { left:50%; bottom:86px; transform:translateX(-50%); font-size:14.5px; font-style:italic; color:#aee7ff;
+    background:rgba(10,16,26,.65); padding:5px 14px; border-radius:14px; display:none; white-space:nowrap; }
+  #hud-banner { top:24%; left:50%; transform:translateX(-50%); text-align:center; display:none; width:90vw; }
+  #banner-title { font-size:34px; font-weight:900; letter-spacing:3px; color:#ffd94d; text-shadow:0 3px 14px rgba(0,0,0,.7); }
+  #banner-sub { font-size:17px; margin-top:5px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.8); }
+  #minimap-wrap { left:16px; bottom:16px; width:190px; height:190px; border-radius:50%; overflow:hidden;
+    border:3px solid rgba(255,225,174,.55); box-shadow:0 4px 18px rgba(0,0,0,.5); }
+  #minimap { width:190px; height:190px; }
+  #hud-footer { bottom:14px; left:50%; transform:translateX(-50%); font-size:13.5px; color:#ffe9c9;
+    background:rgba(16,12,20,.62); padding:6px 16px; border-radius:8px; white-space:nowrap; }
+  #hud-footer b { color:#ffd94d; font-weight:700; }
+  #hud-speed { right:22px; bottom:16px; font-size:44px; font-weight:900; color:#fff; text-shadow:0 3px 10px rgba(0,0,0,.65); display:none; text-align:right; line-height:.95; }
+  #hud-speed span { display:block; font-size:12px; letter-spacing:3px; color:#ffd94d; }
+  #hud-busted { inset:0; display:none; align-items:center; justify-content:center; background:rgba(60,4,4,.38); z-index:8; }
+  #busted-title { font-size:74px; font-weight:900; letter-spacing:14px; color:#ff3b30; text-shadow:0 4px 24px rgba(0,0,0,.8); }
+  #hud-hint { top:64px; right:18px; font-size:12px; color:rgba(255,233,201,.75); text-align:right; }
+  /* ---------- title screen ---------- */
+  #start-screen { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 120%, rgba(255,140,60,.20), rgba(16,8,22,.55) 65%); }
+  #start-card { width:min(700px,92vw); background:rgba(24,13,20,.84); border:1.5px solid rgba(255,190,100,.65);
+    border-radius:16px; padding:34px 44px 28px; text-align:center; box-shadow:0 24px 70px rgba(0,0,0,.6); }
+  #start-card h1 { margin:0; font-size:57px; font-weight:900; letter-spacing:5px;
+    background:linear-gradient(180deg,#ffe9a8,#ffb03a 60%,#ff7a2e); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 34px rgba(255,150,50,.25); }
+  #start-card .tag { font-size:14.5px; letter-spacing:6.5px; color:#8ef0b3; margin-top:5px; }
+  #start-card .pitch { font-size:15.5px; font-weight:800; letter-spacing:3.5px; color:#ffd94d; margin-top:15px; }
+  #start-card .blurb { font-size:15.5px; line-height:1.5; color:#f4e9dc; margin-top:13px; }
+  #start-card .controls { font-size:13.5px; line-height:1.85; color:#ffe9c9; margin-top:14px; }
+  #start-card .controls b { color:#ffd94d; }
+  #start-btn { pointer-events:auto; cursor:pointer; margin-top:20px; font-size:19px; font-weight:900; letter-spacing:2.5px;
+    color:#2a1402; background:linear-gradient(180deg,#ffd94d,#ff9a2e); border:none; border-radius:10px; padding:14px 44px;
+    box-shadow:0 6px 22px rgba(255,150,40,.45); }
+  #start-btn:hover { filter:brightness(1.1); }
+  #start-card .note { font-size:12px; color:rgba(255,233,201,.65); margin-top:14px; }
 </style>
 </head>
 <body>
-<canvas id="scene" aria-label="Costa Verde: an open-world crime game. Drive, steal cars, run missions and dodge the police."></canvas>
-<div id="damage"></div>
-<div class="hud" id="moneyBox">$0<small>COSTA VERDE</small><div id="healthWrap"><div id="healthBar"></div></div></div>
-<div class="hud" id="wanted"><span id="wantedLabel">WANTED</span><span id="stars"></span></div>
-<div class="hud" id="objective"><b id="objTitle">COSTA VERDE</b><span id="objText">Welcome to the coast.</span></div>
-<div class="hud" id="minimapBox"><canvas id="minimap" width="190" height="190"></canvas></div>
-<div class="hud" id="speedBox" style="display:none">0<small>KM/H</small></div>
-<div class="hud" id="crosshair">+</div>
-<div class="hud" id="toast"></div>
-<div class="hud" id="dialogue"><div id="dialogueWho"></div><div id="dialogueText"></div></div>
-<div class="hud" id="hint">WASD move / drive &nbsp;·&nbsp; E enter car &nbsp;·&nbsp; Click shoot &nbsp;·&nbsp; Shift sprint &nbsp;·&nbsp; Space brake &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M music</div>
-<div class="hud" id="banner"><h1 id="bannerTitle"></h1><p id="bannerSub"></p></div>
-<div class="overlay" id="menu">
-  <div class="panel">
+<div id="game-wrap"></div>
+
+<div class="hud" id="hud-top-left">
+  <div id="hud-cash">$0</div>
+  <div id="hud-place">COSTA VERDE</div>
+  <div id="hud-health"><div id="hud-health-fill"></div></div>
+</div>
+<div class="hud" id="hud-stars-wrap">
+  <div id="hud-wanted-label">WANTED</div>
+  <div id="hud-stars">☆☆☆☆☆</div>
+</div>
+<div class="hud" id="hud-objective"><div id="hud-obj-title"></div><div id="hud-obj-sub"></div></div>
+<div class="hud" id="hud-dialogue"><div id="dlg-name"></div><div id="dlg-text"></div></div>
+<div class="hud" id="hud-radio"></div>
+<div class="hud" id="hud-banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+<div class="hud" id="minimap-wrap"><canvas id="minimap" width="220" height="220"></canvas></div>
+<div class="hud" id="hud-footer"><b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>E</b> enter / exit car &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> brake &nbsp;·&nbsp; <b>T</b> next job &nbsp;·&nbsp; <b>F</b> dialogue &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> music</div>
+<div class="hud" id="hud-speed">0<span>KM/H</span></div>
+<div class="hud" id="hud-busted"><div id="busted-title">BUSTED</div></div>
+
+<div id="start-screen">
+  <div id="start-card">
     <h1>COSTA VERDE</h1>
-    <h2>AN OPEN-WORLD CRIME STORY</h2>
-    <p class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</p>
-    <p>Rico Santana rolls into Costa Verde at golden hour with an empty wallet
-    and a reputation to build. Fixer <b>Lena Cruz</b>, garage boss Sal Bianchi,
-    boat captain Mateo Reyes and a cop who shouldn't be helping him have seven
-    jobs that will make him rich — or busted. Steal any car, outrun the
-    cruisers, and when the third star lights up, watch the sky: the police
-    helicopter is coming.</p>
-    <p class="controls">WASD — move / drive &nbsp;·&nbsp; Mouse — look &nbsp;·&nbsp; E — enter / exit car<br>
-    Click — shoot &nbsp;·&nbsp; Shift — sprint &nbsp;·&nbsp; Space — brake &nbsp;·&nbsp; P — pause &nbsp;·&nbsp; M — music</p>
-    <button id="btnStart">START ENGINE</button>
-    <button id="btnContinue" class="ghost" style="display:none">CONTINUE</button>
-    <p style="font-size:12px;color:#9fb6d6">Original game. No real city, person or car is copied. Runs fully offline.</p>
+    <div class="tag">AN OPEN-WORLD CRIME STORY</div>
+    <div class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
+    <p class="blurb">Rico Santana rolls into Costa Verde at golden hour with an empty wallet and a reputation
+      to build. Fixer <b>Lena Cruz</b>, garage boss <b>Sal Bianchi</b>, boat captain <b>Mateo Reyes</b> and one cop
+      who shouldn't be helping him have seven jobs that will make him rich — or busted. Steal any car, run the jobs,
+      and when the third star lights up, watch the sky: the police helicopter is coming.</p>
+    <div class="controls">
+      <b>WASD</b> — move / drive &nbsp;·&nbsp; <b>Mouse</b> — look &nbsp;·&nbsp; <b>E</b> — enter / exit car<br>
+      <b>Click</b> — shoot &nbsp;·&nbsp; <b>Shift</b> — sprint &nbsp;·&nbsp; <b>Space</b> — brake &nbsp;·&nbsp; <b>P</b> — pause &nbsp;·&nbsp; <b>M</b> — music
+    </div>
+    <button id="start-btn">START ENGINE</button>
+    <div class="note">Original game. No real city, person or car is copied. Runs fully offline.</div>
   </div>
 </div>
-<div class="overlay" id="pauseMenu" style="display:none">
-  <div class="panel">
-    <h1 style="font-size:36px">PAUSED</h1>
-    <p id="pauseStats"></p>
-    <button id="btnResume">RESUME</button>
-    <button id="btnSave" class="ghost">SAVE GAME</button>
-    <button id="btnQuit" class="ghost">QUIT TO MENU</button>
-  </div>
-</div>
-<p id="status" role="status" aria-live="polite"></p>
-<script src="./vendor/three.min.js"></script>
-<script type="module" src="./src/main.js"></script>
+
+<script src="vendor/three.min.js"></script>
+<script src="src/util.js"></script>
+<script src="src/save.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/city.js"></script>
+<script src="src/actors.js"></script>
+<script src="src/systems.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/main.js"></script>
 </body>
 </html>
