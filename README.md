@@ -1,69 +1,66 @@
-# Costa Verde — an open-world crime story
-
 [![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![rank](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-An original open-world crime game that runs entirely in the browser — no build
-step, no server, no network. Open `game/index.html` and play. Rico Santana
-rolls into the coastal city of Costa Verde at golden hour with an empty wallet
-and seven jobs between him and a fortune.
+# Costa Verde — an open-world crime story
 
-## The game
+A golden-hour open-world crime game that runs entirely in the browser from static files. You are **Rico Santana**, rolling into the coastal city of Costa Verde at sunset with an empty wallet and seven jobs between you and the big money.
 
-- **Golden-hour world** — gradient sunset sky dome, low sun with long shadows,
-  warm fog, ACES tone mapping. A 9×9 city grid of ~100 buildings with lit
-  windows, palm boulevards and landmarks: the hospital, the east warehouse,
-  the Sunset Club and Sal's garage.
-- **Waterfront** — a visible teal sea (above the ground plane, as it should
-  be), beach, boardwalk with rails, three marina piers, 16 umbrellas and
-  seven bobbing sailboats.
-- **On foot and behind the wheel** — walk, sprint, steal any parked car.
-  Five vehicle kinds including a pickup and the Comet GT. Chase camera with
-  a speed-driven FOV kick, a slight roll in turns and a km/h readout.
-- **Wanted system, 0–5 stars** — cruisers pursue and ram, foot cops chase on
-  foot, and getting caught means a BUSTED banner, a fine and a hospital
-  respawn. Stars decay while nobody sees you.
-- **Police helicopter** — from three stars (a second at five): dark body,
-  spinning rotors, flashing beacons and a real searchlight — additive cone,
-  true spotlight and a light pool that tracks you, plus a purple dot on the
-  minimap. It counts as seeing you, so the stars stop decaying.
-- **Pistol combat both ways** — click to shoot; Vipers and cops shoot back.
-- **Sound, synthesized live** — engine pitch follows speed, sirens, gunshots
-  and a little sunset synth loop, all WebAudio. No audio files.
-- **Saves itself** — cash, story progress and position persist in
-  localStorage.
+## The city
 
-## The seven jobs
+- A 9×9 street grid with ~100 buildings: pastel art-deco beach blocks, downtown glass towers, brick and terracotta mid-rises, rooftop water towers and AC units, and canvas-texture neon billboards (`HOTEL`, `COSTA VERDE`, `OPEN LATE`, `MARINA`, `SURF SHOP`, `CASINO`).
+- **The Hero Boulevard** — a wide palm-lined avenue built for one shot: driving west, into the sun, with long shadows raking the road and the sea glinting at the end of the street.
+- A multi-stop gradient sky (deep blue → violet → rose → orange → gold), a big low sun disc with a halo, pink-lit clouds, warm fog and ACES tone mapping.
+- The waterfront: teal sea with a **sun-glitter path**, 7 bobbing sailboats, 3 marina piers, a beach with 16 umbrellas, and a railed boardwalk.
+- Street life: 20 traffic cars (one convertible, glowing headlights), 44 pedestrians, streetlights, and parked stealable cars everywhere.
 
-| # | Job | Giver | Pay |
-|---|-----|-------|-----|
-| 1 | Welcome to Costa Verde | Lena Cruz | $400 |
-| 2 | Hot Property | Sal Bianchi | $800 |
-| 3 | Marina Run | Mateo Reyes | $1,100 |
-| 4 | Payback Time | Sal Bianchi | $1,500 |
-| 5 | The Informant | Officer Dana Ruiz | $1,800 |
-| 6 | The Big Score | Lena Cruz | $2,500 |
-| 7 | Sunset Showdown | Lena Cruz | $4,000 |
+## How to play
 
-Every job opens with the giver — gold shirt, gold marker — a dialogue box and
-radio chatter, runs under an objective bar with distance or a timer, and pays
-out on the completion banner. Press **T** in free-roam to start the next job.
+| Input | Action |
+| --- | --- |
+| WASD / arrows | Move / drive |
+| Mouse | Look |
+| E | Enter / exit car (any parked or moving car can be stolen) |
+| Click | Shoot |
+| Shift | Sprint |
+| Space | Brake |
+| T | Start the next story job |
+| F | Advance dialogue |
+| P | Pause |
+| M | Music on/off |
 
-## Controls
+## Story mode — seven jobs
 
-**WASD** move / drive · **Mouse** look · **E** enter / exit car ·
-**Click** shoot · **Shift** sprint · **Space** brake · **T** next job ·
-**F** advance dialogue · **P** pause · **M** music
+Each job opens with a named giver, a dialogue scene and radio chatter, and pays out on completion:
+
+1. **Welcome to Costa Verde** — Lena Cruz — a package run across town — $400
+2. **Hot Property** — Sal Bianchi — steal the teal Comet GT and deliver it to the warehouse — $800
+3. **Marina Run** — Mateo Reyes — cargo at the far pier, harbour patrol heat — $1,100
+4. **Payback Time** — Lena Cruz — take down 5 Vipers at the east warehouse — $1,500
+5. **The Informant** — Officer Dana Ruiz — rescue an informant under a 3-star heat — $1,800
+6. **The Big Score** — Sal Bianchi — a timed cross-city delivery with every badge in town awake — $2,500
+7. **Sunset Showdown** — Mateo Reyes — a six-gun marina fight, then a 5-star escape to the pier — $4,000
+
+## Side systems
+
+- **Street Race (Sunset GP)** — drive through the glowing gate on the boulevard to start a 6-checkpoint race against the clock. Win $300, chase your saved best time, repeat forever.
+- **Taxi Fares** — pedestrians wave and hail you. Stop beside them in any car, take them to the gold marker, and earn a fare that scales with distance.
+
+## The law
+
+- Wanted level 0–5 stars. Cruisers with flashing light bars pursue and ram; foot cops chase on foot; commit crimes near witnesses and the stars climb.
+- From **3 stars the police helicopter arrives** (a second at 5): spinning rotors, flashing beacon, and a real spotlight with a visible searchlight cone and a pool of light that pins you to the street. It counts as eyes on you — break line of sight and stay unseen to let the stars decay.
+- Get cornered and you are **BUSTED**: a fine, and you wake up outside Costa Verde General. Get shot down and the hospital bill stings instead.
 
 ## Tech
 
-Plain JavaScript on three.js (vendored, r149), one fixed-step simulation
-decoupled from the frame rate, zero external requests. `main.ts` builds the
-make.fun dossier; `shots.mjs` stages and captures the screenshots headlessly;
-`playtest.mjs` plays the game end-to-end in a headless browser and checks the
-story payouts to the dollar.
+- Plain JavaScript modules under `game/src/` on a vendored three.js (r149) — no build step, no network, fully offline.
+- Fixed-step simulation decoupled from the render loop; chase camera with speed-based FOV kick (62°→73°) and turn roll.
+- Synthesized WebAudio only: engine pitch follows speed, gunshots, two-tone sirens, cash chimes, and a four-chord sunset pad loop. No audio files.
+- `localStorage` save: cash, story progress, position, race best time, fares and races won.
+- `playtest.mjs` drives the real game headlessly (CDP) through walking, stealing, driving, all seven jobs with exact payouts, combat both ways, police/helicopter response, the race and a taxi fare — 28 checks, all passing, with 0 console errors and 0 external requests.
+- `shots.mjs` captures the four screenshots through the game's own staging hooks; the cover shot is gated geometrically on the helicopter's projected position in frame.
 
-Original game. No real city, person or car is copied. Runs fully offline.
+Original game. No real city, person or car is copied.
 
 Entered on make.fun — see the bounty: https://make.fun/bounty/gta6-01

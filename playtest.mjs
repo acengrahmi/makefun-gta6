@@ -1,133 +1,254 @@
 // Costa Verde — playtest: one comprehensive headless pass over the real game.
-// Checks gameplay systems end-to-end and demands 0 console errors / 0 external requests.
+// Loading, rendering, walking, stealing, driving, all 7 story jobs with exact
+// payouts, combat both ways, wanted/police/helicopter, the street race, a taxi
+// fare and the autosave — plus 0 console errors and 0 external requests.
 import { spawn } from 'node:child_process';
-import http from 'node:http';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 
-const ROOT = new URL('./game/', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
+const ROOT = process.cwd();
+const GAME_URL = 'file://' + join(ROOT, 'game', 'index.html');
+const CHROME = '/opt/meta-chromium/chrome';
+const POLICY = '/var/lib/hatch-browser/rootfs-base/usr/share/hatch/chromium/webgl-allowed-domains.txt';
+const POLICY_SHA = '8097045f0459c96c4cdc76e3a1af4e0f43f640b4b59c43d6db35e3641c0264c6';
+const PORT = 9352;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const checks = [];
+const check = (name, ok, extra) => { checks.push({ name, ok: !!ok, extra: extra || '' }); console.log((ok ? '  PASS ' : '  FAIL ') + name + (extra ? ' — ' + extra : '')); };
+
+async function connect() {
+  const proc = spawn(CHROME, [
+    '--headless=new', '--no-sandbox', '--disable-dev-shm-usage',
+    '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader',
+    '--hatch-webgl-allowed-domains-file=' + POLICY,
+    '--hatch-webgl-allowed-domains-sha256=' + POLICY_SHA,
+    '--remote-debugging-port=' + PORT,
+    '--window-size=1280,720', '--hide-scrollbars', '--force-device-scale-factor=1',
+    '--user-data-dir=/tmp/cv6-test-profile', 'about:blank',
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let ver = null;
+  for (let i = 0; i < 60 && !ver; i++) {
+    try { ver = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); }
+    catch (e) { await sleep(400); }
+  }
+  if (!ver) throw new Error('chromium devtools never came up');
+  const ws = new WebSocket(ver.webSocketDebuggerUrl);
+  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+  let id = 0;
+  const pending = new Map();
+  const listeners = [];
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+    else if (msg.method) for (const fn of listeners) fn(msg);
+  };
+  const send = (method, params = {}, sessionId) => new Promise((resolve) => {
+    const mid = ++id;
+    pending.set(mid, resolve);
+    ws.send(JSON.stringify({ id: mid, method, params, ...(sessionId ? { sessionId } : {}) }));
+  });
+  return { proc, send, on: (fn) => listeners.push(fn) };
+}
+
+async function main() {
+  const { proc, send, on } = await connect();
+  const errors = [], external = [];
   try {
-    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    if (p === '/') p = '/index.html';
-    const data = await readFile(join(ROOT, '.' + p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, '127.0.0.1', r));
-const PORT = server.address().port;
-// this Chromium build requires a Hatch WebGL domain policy at startup:
-// the platform's canonical all-origins contract file plus its SHA-256.
-const POLICY_PATH = '/var/lib/hatch-browser/rootfs-base/usr/share/hatch/chromium/webgl-allowed-domains.txt';
-const { readFileSync } = await import('node:fs');
-const POLICY_SHA = createHash('sha256').update(readFileSync(POLICY_PATH)).digest('hex');
-const chrome = spawn('/opt/meta-chromium/chrome', [
-  '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader',
-  '--no-sandbox', '--remote-debugging-port=0', '--window-size=1280,720',
-  '--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessChecks,BlockInsecurePrivateNetworkRequests',
-  '--hatch-webgl-allowed-domains-file=' + POLICY_PATH, '--hatch-webgl-allowed-domains-sha256=' + POLICY_SHA, 'about:blank',
-], { stdio: ['ignore', 'ignore', 'pipe'] });
-const wsUrl = await new Promise((res, rej) => {
-  let buf = ''; chrome.stderr.on('data', d => { buf += d; const m = buf.match(/ws:\/\/\S+/); if (m) res(m[0]); });
-  setTimeout(() => rej(new Error('chrome start timeout')), 25000);
-});
-let _id = 0; const pending = new Map(); const events = [];
-const ws = new WebSocket(wsUrl);
-await new Promise(r => ws.addEventListener('open', r, { once: true }));
-ws.addEventListener('message', ev => {
-  const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
-  else if (m.method) events.push(m);
-});
-function send(method, params = {}, sessionId) {
-  return new Promise(res => { const i = ++_id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params, sessionId })); });
-}
-const GAME_URL = 'file://' + ROOT + 'index.html'; // this Chromium blocks http://127.0.0.1 navigations (LNA); file:// is the local channel
-// browser-initiated navigation: create the target directly on the game URL
-// (a renderer navigation from about:blank to localhost is blocked by LNA checks)
-const { result: { targetId } } = await send('Target.createTarget', { url: GAME_URL });
-const { result: { sessionId } } = await send('Target.attachToTarget', { targetId, flatten: true });
-const S = (m, p) => send(m, p, sessionId);
-await S('Page.enable'); await S('Runtime.enable'); await S('Network.enable'); await S('Log.enable'); await S('Input.enable').catch(() => {});
-const errors = [], external = [];
-function collect() {
-  for (const m of events.splice(0)) {
-    if (m.method === 'Runtime.exceptionThrown') errors.push('exception');
-    if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push('console.error');
-    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') errors.push('log error');
-    if (m.method === 'Network.requestWillBeSent') {
-      const u = m.params.request.url;
-      if (!u.startsWith('file://') && !u.startsWith('http://127.0.0.1') && !u.startsWith('data:') && !u.startsWith('blob:')) external.push(u);
+    const { result } = await send('Target.createTarget', { url: 'about:blank' });
+    const att = await send('Target.attachToTarget', { targetId: result.targetId, flatten: true });
+    const sid = att.result.sessionId;
+    await send('Page.enable', {}, sid);
+    await send('Runtime.enable', {}, sid);
+    await send('Network.enable', {}, sid);
+    await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sid);
+    on((msg) => {
+      if (msg.sessionId !== sid) return;
+      if (msg.method === 'Runtime.exceptionThrown') errors.push('exception: ' + (msg.params.exceptionDetails.text || ''));
+      if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') errors.push('console: ' + msg.params.args.map((a) => a.value || a.description || '').join(' '));
+      if (msg.method === 'Network.requestWillBeSent') {
+        const u = msg.params.request.url;
+        if (!u.startsWith('file://') && !u.startsWith('data:') && !u.startsWith('blob:')) external.push(u);
+      }
+    });
+    const evaluate = async (expr) => {
+      const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sid);
+      if (r.result.exceptionDetails) throw new Error('evaluate failed: ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text));
+      return r.result.result.value;
+    };
+    const key = (type, code, k) => send('Input.dispatchKeyEvent', { type, code, key: k, windowsVirtualKeyCode: 0 }, sid);
+    const J = async (expr) => JSON.parse(await evaluate(`JSON.stringify((${expr}))`));
+
+    await send('Page.navigate', { url: GAME_URL }, sid);
+    let ready = false;
+    for (let i = 0; i < 60 && !ready; i++) { await sleep(350); ready = await evaluate('!!(window.CV && CV.api)').catch(() => false); }
+    check('game loads and exposes its API', ready);
+    await evaluate('CV.api.step(30)');
+    const shotLen = await (async () => {
+      const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70, fromSurface: true }, sid);
+      return r.result.data.length;
+    })();
+    check('renderer actually draws (real frame captured)', shotLen > 9000, 'jpeg base64 chars ' + shotLen);
+    // Logic tests do not need pixels: stub out rendering so fixed steps run fast.
+    await evaluate('CV.api.renderer.render = () => {};');
+
+    const counts0 = await J('CV.api.counts()');
+    check('traffic >= 20', counts0.traffic >= 20, 'traffic=' + counts0.traffic);
+    check('pedestrians >= 44', counts0.peds >= 44, 'peds=' + counts0.peds);
+    check('buildings >= 90 colliders', counts0.colliders >= 90, 'colliders=' + counts0.colliders);
+    check('7 sailboats', counts0.boats === 7, 'boats=' + counts0.boats);
+
+    await evaluate('CV.api.resetSave(); CV.api.startGame(); CV.api.state.taxi.t = 99999;');
+    check('game starts, title hides', await evaluate('CV.api.state.started && document.getElementById("title").style.display === "none"'));
+
+    // Walk with real key input.
+    const p0 = await J('({x: CV.api.state.player.x, z: CV.api.state.player.z})');
+    await key('keyDown', 'KeyW', 'w');
+    await evaluate('CV.api.step(40)');
+    await key('keyUp', 'KeyW', 'w');
+    const p1 = await J('({x: CV.api.state.player.x, z: CV.api.state.player.z})');
+    check('player walks with W', Math.hypot(p1.x - p0.x, p1.z - p0.z) > 1.5, `moved ${Math.hypot(p1.x - p0.x, p1.z - p0.z).toFixed(1)}m`);
+
+    // Steal a parked car, drive it, exit.
+    const spot = await J('(() => { const c = CV.actors.parked[0]; return { x: c.x, z: c.z }; })()');
+    await evaluate(`CV.api.teleport(${spot.x + 2}, ${spot.z})`);
+    await evaluate('CV.api.enterCar()');
+    check('enter/steal a parked car', await evaluate('CV.api.state.player.mode') === 'car');
+    await key('keyDown', 'KeyW', 'w');
+    await evaluate('CV.api.step(50)');
+    await key('keyUp', 'KeyW', 'w');
+    const drv = await J('({ speed: CV.api.state.player.car.speed, x: CV.api.state.player.x, z: CV.api.state.player.z })');
+    check('car drives under power', Math.abs(drv.speed) > 3 && Math.hypot(drv.x - spot.x, drv.z - spot.z) > 3, 'speed ' + drv.speed.toFixed(1));
+    await evaluate('CV.api.exitCar()');
+    check('exit car back on foot', await evaluate('CV.api.state.player.mode') === 'foot');
+
+    // Run one story job entirely inside the page through the real systems.
+    const runJob = `((idx) => {
+      const S = CV.api.state, SYS = CV.systems;
+      S.health = 100; S.taxi.t = 99999;
+      const before = S.cash;
+      CV.api.startNextJob();
+      if (!S.job && !S.dialogue) return { ok: false, why: 'job did not start' };
+      let guard = 0;
+      while ((S.job || S.dialogue) && guard++ < 900) {
+        if (S.dialogue) { SYS.advanceDialogue(S); CV.api.step(2); continue; }
+        const st = SYS.jobObjective(S);
+        if (!st) break;
+        S.health = 100;
+        if (st.t === 'goto' || st.t === 'deliver' || st.t === 'escape') { if (S.player.mode === 'car' && st.x < -296) CV.api.exitCar(); CV.api.teleport(st.x, st.z); CV.api.step(3); }
+        else if (st.t === 'steal') {
+          const jc = S.jobCar;
+          for (let tries = 0; tries < 6 && S.player.car !== jc; tries++) {
+            if (S.player.mode === 'car') CV.api.exitCar();
+            for (const c of [...CV.actors.traffic, ...CV.actors.parked]) {
+              if (c !== jc && Math.hypot(c.x - jc.x, c.z - jc.z) < 11) { c.x += 90; c.z += 40; c.mesh.position.set(c.x, 0, c.z); }
+            }
+            CV.api.teleport(jc.x - 2, jc.z);
+            CV.api.enterCar();
+          }
+          CV.api.step(3);
+        }
+        else if (st.t === 'fight') {
+          CV.api.teleport(st.x + 14, st.z);
+          let g2 = 0;
+          while (S.enemies.some((e) => !e.down) && g2++ < 260) {
+            S.health = 100;
+            const e = S.enemies.find((en) => !en.down);
+            S.player.angle = Math.atan2(e.x - S.player.x, e.z - S.player.z);
+            CV.api.shoot();
+            CV.api.step(2);
+          }
+          CV.api.step(3);
+        } else { CV.api.step(3); }
+      }
+      return { ok: !S.job, delta: S.cash - before, guard };
+    })`;
+
+    const expected = [400, 800, 1100, 1500, 1800, 2500, 4000];
+    for (let i = 0; i < 7; i++) {
+      const res = await J(`${runJob}(${i})`);
+      check(`job ${i + 1} completes and pays exactly $${expected[i]}`, res.ok && res.delta === expected[i], JSON.stringify(res));
     }
+    check('total story earnings $12,100', await evaluate('CV.api.state.cash') === 12100, 'cash=' + await evaluate('CV.api.state.cash'));
+
+    // Enemy fire hurts the player (combat both ways).
+    const hurt = await evaluate(`(() => {
+      const S = CV.api.state;
+      CV.systems.spawnEnemy(S.scene || CV.api.scene, S, S.player.x + 9, S.player.z);
+      S.health = 100;
+      let took = false;
+      for (let i = 0; i < 420 && !took; i++) { CV.api.step(3); if (S.health < 100) took = true; }
+      const e = S.enemies[S.enemies.length - 1];
+      if (e) { e.down = true; e.mesh.rotation.x = -Math.PI / 2; }
+      S.enemies = S.enemies.filter((en) => !en.down || en !== e);
+      return took;
+    })()`);
+    check('enemy gunfire damages the player', hurt === true);
+
+    // Wanted: cruisers + helicopter arrive.
+    await evaluate('CV.api.setWanted(4); CV.api.step(40);');
+    const pol = await J('CV.api.counts()');
+    check('wanted 4: >=3 cruisers', pol.cruisers >= 3, 'cruisers=' + pol.cruisers);
+    check('wanted 4: helicopter on scene', pol.helis >= 1, 'helis=' + pol.helis);
+    await evaluate('CV.api.setWanted(5); CV.api.step(40);');
+    const pol5 = await J('CV.api.counts()');
+    check('wanted 5: second helicopter', pol5.helis >= 2, 'helis=' + pol5.helis);
+    await evaluate('CV.systems.resetHeat(CV.api.state); CV.api.setWanted(0); CV.api.step(5);');
+
+    // Street race: drive the gate, then clear every checkpoint.
+    const race = await J(`(() => {
+      const S = CV.api.state;
+      if (S.player.mode !== 'car') { const c = CV.actors.parked[0]; CV.api.teleport(c.x + 2, c.z); CV.api.enterCar(); }
+      const car = S.player.car;
+      CV.api.teleport(238, 60); car.angle = -Math.PI / 2; S.player.angle = -Math.PI / 2; car.speed = 16;
+      let started = false;
+      for (let i = 0; i < 240 && !started; i++) { car.speed = Math.max(car.speed, 14); CV.api.step(2); if (S.race.active) started = true; }
+      if (!started) return { ok: false, why: 'race never started', x: S.player.x };
+      const before = S.cash;
+      let g = 0;
+      while (S.race.active && g++ < 40) {
+        const cp = CV.systems.RACE_CPS[S.race.cp];
+        CV.api.teleport(cp[0], cp[1]);
+        CV.api.step(4);
+      }
+      return { ok: !S.race.active, delta: S.cash - before, best: CV.save.data.bestRace, won: CV.save.data.racesWon };
+    })()`);
+    check('street race starts at the gate and pays $300 on the win', race.ok && race.delta === 300, JSON.stringify(race));
+
+    // Taxi fare end to end.
+    const taxi = await J(`(() => {
+      const S = CV.api.state;
+      S.taxi.t = 0;
+      let g = 0;
+      while (S.taxi.state !== 'hail' && g++ < 30) CV.api.step(2);
+      if (S.taxi.state !== 'hail') return { ok: false, why: 'no hail', state: S.taxi.state };
+      const p = S.taxi.ped;
+      if (S.player.mode !== 'car') { const c = CV.actors.parked[0]; CV.api.teleport(c.x + 2, c.z); CV.api.enterCar(); }
+      CV.api.teleport(p.x + 3, p.z);
+      S.player.car.speed = 0;
+      CV.api.step(4);
+      if (S.taxi.state !== 'ride') return { ok: false, why: 'no pickup', state: S.taxi.state };
+      const before = S.cash;
+      CV.api.teleport(S.taxi.dx, S.taxi.dz);
+      CV.api.step(4);
+      return { ok: S.taxi.state === 'idle', fare: S.cash - before, fares: CV.save.data.fares };
+    })()`);
+    check('taxi fare: hail, pickup, delivery pays', taxi.ok && taxi.fare > 30, JSON.stringify(taxi));
+
+    // Autosave persisted.
+    await evaluate('CV.api.step(300)');
+    const saved = await J('JSON.parse(localStorage.getItem("costaverde-save-v1") || "{}")');
+    const nowCash = await evaluate('CV.api.state.cash');
+    check('autosave persists cash + progress', saved.cash === nowCash && saved.nextJob === 7, JSON.stringify(saved));
+
+    check('0 console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    check('0 external requests', external.length === 0, external.slice(0, 3).join(' | '));
+
+    const failed = checks.filter((c) => !c.ok);
+    console.log(`\nPLAYTEST: ${checks.length - failed.length}/${checks.length} passed`);
+    if (failed.length) process.exitCode = 1;
+  } finally {
+    proc.kill('SIGKILL');
   }
 }
-async function evl(expr) {
-  const r = await S('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
-  if (r.result.exceptionDetails) {
-    const d = r.result.exceptionDetails;
-    throw new Error('eval failed: ' + expr.slice(0, 60) + ' — ' + (d.exception && d.exception.description || d.text || '').slice(0, 300));
-  }
-  return r.result.result.value;
-}
-const key = (type, code, k) => S('Input.dispatchKeyEvent', { type, code, key: k, windowsVirtualKeyCode: 0 });
-let pass = 0, fail = 0;
-function check(name, cond) { if (cond) { pass++; console.log('  PASS', name); } else { fail++; console.log('  FAIL', name); } }
 
-for (let i = 0; i < 120 && !(await evl('typeof window.__cv === "object"')); i++) await new Promise(r => setTimeout(r, 120));
-console.log('  page:', await evl('location.href + " | " + document.title + " | THREE=" + typeof window.THREE + " CV=" + typeof window.CV'));
-
-check('boots with __cv hooks', true);
-check('canvas rendered', await evl('!!document.querySelector("canvas")'));
-check('7 jobs with exact payouts', await evl('__cv.jobs.length===7 && __cv.jobs.map(j=>j.pay).join() === "400,800,1100,1500,1800,2500,4000"'));
-check('counts: 16 traffic / 38 peds', await evl('(()=>{const c=__cv.counts(); return c.traffic===16 && c.peds===38;})()'));
-await evl('localStorage.clear(); __cv.save.wipe(); __cv.G.cash=0; __cv.G.jobIndex=0; __cv.G.health=100; __cv.start()');
-check('title screen hides on start', await evl('document.getElementById("start-screen").style.display==="none"'));
-// keyboard walking (heading PI = north, pz must drop)
-const z0 = await evl('__cv.G.pz');
-await key('keyDown', 'KeyW', 'w'); await evl('__cv.stepN(50)'); await key('keyUp', 'KeyW', 'w');
-check('keyboard walking moves the player', await evl(`__cv.G.pz < ${z0} - 2`));
-// steal / drive / exit a parked car
-await evl('__cv.teleport(24,-57,0); __cv.enterCar()');
-check('steal: entered a parked car', await evl('__cv.G.inCar===true'));
-await key('keyDown', 'KeyW', 'w'); await evl('__cv.stepN(45)');
-check('driving: car gains speed', await evl('Math.abs(__cv.G.car.speed) > 4'));
-await key('keyUp', 'KeyW', 'w'); await evl('__cv.enterCar()');
-check('exit car on foot again', await evl('__cv.G.inCar===false'));
-// job 1 end-to-end: exactly +$400 and an autosave
-await evl('__cv.press("KeyT")');
-check('job 1 starts with Lena dialogue', await evl('__cv.G.dialogue && __cv.G.dialogue[0].speaker==="Lena Cruz"'));
-check('giver NPC waits at the marker', await evl('!!__cv.mission.giverMesh'));
-for (const [x, z] of [[-110, -110], [110, -22], [154, 110]]) await evl(`__cv.teleport(${x},${z},0); __cv.stepN(8)`);
-check('job 1 completes', await evl('__cv.mission.active===false && __cv.G.jobIndex===1'));
-check('job 1 pays exactly $400', await evl('__cv.G.cash===400'));
-check('autosave holds the cash', await evl('(localStorage.getItem("costa-verde-save-v1")||"").includes("\\"cash\\":400")'));
-// job 2: steal the Comet, deliver it, +$800
-await evl('__cv.press("KeyT"); __cv.teleport(-44,-110,0); __cv.stepN(8)');
-await evl('__cv.teleport(66,154,0); __cv.stepN(8); __cv.enterCar()');
-check('job 2: Comet GT stolen (driving it)', await evl('__cv.G.inCar && __cv.G.car.kind==="comet"'));
-await evl('__cv.G.car.x=-44; __cv.G.car.z=-108; __cv.stepN(8)');
-check('job 2 completes, cash $1,200', await evl('__cv.mission.active===false && __cv.G.cash===1200'));
-// combat both ways: the warehouse fight (job 4)
-await evl('if(__cv.G.inCar) __cv.enterCar(); __cv.G.jobIndex=3; __cv.G.health=500; __cv.press("KeyT"); __cv.teleport(-110,-110,0); __cv.stepN(8)');
-check('fight spawns 5 Vipers', await evl('__cv.systems.gangers.length===5'));
-await evl('__cv.teleport(110,124,0); __cv.stepN(5)');
-const hurt = await evl('(()=>{const h=__cv.G.health; __cv.stepN(300); return __cv.G.health < h;})()');
-check('gangers shoot back (player hurt)', hurt);
-await evl('__cv.systems.gangers.slice().forEach(g=>{ for(let i=0;i<6 && !g.downed;i++) __cv.shootAt(g); })');
-console.log('  ganger state:', await evl('__cv.systems.gangers.map(g=>[Math.round(g.health), g.downed, Math.round(Math.hypot(g.x-__cv.G.px, g.z-__cv.G.pz))].join("/")).join(" ") + " player=" + Math.round(__cv.G.px) + "," + Math.round(__cv.G.pz) + " wanted=" + __cv.G.wanted'));
-check('all Vipers downed by pistol fire', await evl('__cv.systems.gangers.every(g=>g.downed)'));
-await evl('__cv.stepN(10)');
-check('fight job completes (+$1,500)', await evl('__cv.mission.active===false && __cv.G.cash===2700'));
-// wanted 4: cruisers + helicopter converge
-await evl('__cv.systems.resetHeat(__cv.G); __cv.G.wanted=4; __cv.teleport(0,66,-Math.PI/2); __cv.stepN(300)');
-check('wanted 4 spawns cruisers', await evl('__cv.counts().cruisers>=1'));
-check('wanted 4 activates the helicopter', await evl('__cv.counts().helis>=1'));
-check('helicopter converges near the player', await evl('(()=>{const h=__cv.systems.helis[0]; return Math.hypot(h.x-__cv.G.px, h.z-__cv.G.pz) < 55;})()'));
-collect();
-check('0 console errors', errors.length === 0);
-check('0 external requests', external.length === 0);
-console.log(`\nPLAYTEST: ${pass} passed, ${fail} failed`);
-chrome.kill(); server.close();
-process.exit(fail ? 1 : 0);
+main().catch((e) => { console.error('playtest crashed:', e.message); process.exit(1); });
