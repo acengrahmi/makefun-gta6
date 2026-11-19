@@ -5,70 +5,98 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Costa Verde — Sunset Boulevard</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a0f24; font-family: 'Segoe UI', Arial, sans-serif; }
-  #game { position: fixed; inset: 0; display: block; }
-  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
-  #cash { position: absolute; top: 14px; left: 18px; font-size: 30px; font-weight: 800; color: #7dff6a; text-shadow: 0 2px 6px #000; letter-spacing: 1px; }
-  #carLabel { position: absolute; top: 52px; left: 18px; font-size: 13px; font-weight: 700; color: #ffd23f; text-shadow: 0 1px 4px #000; letter-spacing: 2px; }
-  #stars { position: absolute; top: 12px; right: 20px; font-size: 30px; letter-spacing: 4px; text-shadow: 0 2px 6px #000; }
-  #objective { position: absolute; top: 56px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 600; color: #ffe9b0; text-shadow: 0 2px 5px #000; }
-  #raceInfo { position: absolute; top: 84px; left: 0; right: 0; text-align: center; font-size: 15px; font-weight: 700; color: #4de3ff; text-shadow: 0 2px 5px #000; display: none; }
-  #banner { position: absolute; top: 22%; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: 800; text-shadow: 0 3px 8px #000; opacity: 0; transition: opacity .4s; }
-  #minimap { position: absolute; left: 16px; bottom: 16px; width: 176px; height: 176px; border: 3px solid rgba(255,210,63,.75); border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.55); }
-  #healthWrap { position: absolute; left: 16px; bottom: 202px; width: 176px; height: 10px; background: rgba(0,0,0,.55); border-radius: 5px; overflow: hidden; }
-  #healthFill { height: 100%; width: 100%; background: #7dff6a; }
-  #bustWrap { position: absolute; left: 50%; bottom: 190px; transform: translateX(-50%); width: 260px; height: 14px; background: rgba(0,0,0,.6); border: 2px solid #5db9ff; border-radius: 7px; overflow: hidden; display: none; }
-  #bustFill { height: 100%; width: 0%; background: #5db9ff; }
-  #bustLabel { position: absolute; left: 50%; bottom: 208px; transform: translateX(-50%); font-size: 12px; font-weight: 800; letter-spacing: 3px; color: #5db9ff; text-shadow: 0 1px 4px #000; display: none; }
-  #prompt { position: absolute; left: 0; right: 0; bottom: 120px; text-align: center; font-size: 18px; font-weight: 700; color: #fff; text-shadow: 0 2px 6px #000; display: none; }
-  #dialogue { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); width: min(680px, 86vw); background: rgba(12,10,22,.88); border: 2px solid #ffd23f; border-radius: 12px; padding: 14px 20px 12px; display: none; }
-  #dlgWho { font-size: 15px; font-weight: 800; color: #ffd23f; letter-spacing: 1px; margin-bottom: 4px; }
-  #dlgText { font-size: 18px; color: #fff; line-height: 1.35; }
-  #dlgHint { font-size: 12px; color: #bdb6c9; margin-top: 6px; text-align: right; }
-  #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(24,10,40,.25), rgba(24,10,40,.78)); z-index: 5; cursor: pointer; }
-  #title h1 { font-size: min(92px, 13vw); margin: 0; font-weight: 900; letter-spacing: 4px; color: #ffd23f; text-shadow: 0 0 34px rgba(255,120,60,.85), 0 6px 0 #b33a1e, 0 10px 26px #000; font-style: italic; }
-  #title h2 { font-size: min(30px, 4.6vw); margin: 2px 0 10px; font-weight: 800; letter-spacing: 9px; color: #ff8ac2; text-shadow: 0 3px 10px #000; }
-  #pitch { font-size: min(19px, 3vw); font-weight: 700; letter-spacing: 3px; color: #fff; text-shadow: 0 2px 8px #000; margin-bottom: 26px; }
-  #playBtn { font-size: 22px; font-weight: 800; letter-spacing: 2px; color: #14100a; background: linear-gradient(180deg, #ffe95d, #ffb347); border: none; border-radius: 999px; padding: 14px 46px; box-shadow: 0 8px 24px rgba(0,0,0,.6); animation: pulse 1.6s infinite; }
-  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-  #controls { margin-top: 24px; color: #e8e2f2; font-size: 14px; line-height: 1.7; text-align: center; text-shadow: 0 2px 5px #000; }
-  #saveNote { margin-top: 10px; color: #7dff6a; font-size: 14px; font-weight: 600; }
-  #overlay { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,4,16,.72); z-index: 6; }
-  #ovTitle { font-size: min(96px, 14vw); font-weight: 900; letter-spacing: 10px; text-shadow: 0 8px 30px #000; }
-  #ovSub { font-size: 19px; color: #fff; margin-top: 8px; text-shadow: 0 2px 8px #000; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a0f14;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; color: #fff; }
+  #scene { position: fixed; inset: 0; }
+  #scene canvas { display: block; }
+  /* warm grade over the 3D frame: darker corners, a breath of sunset at the top */
+  #grade { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background:
+      linear-gradient(180deg, rgba(255,140,60,.10), rgba(0,0,0,0) 26%),
+      radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 55%, rgba(10,4,10,.42) 100%); }
+  .hud { position: fixed; z-index: 5; text-shadow: 0 2px 6px rgba(0,0,0,.65); }
+  #cashbox { top: 18px; left: 22px; }
+  #cash { font-size: 30px; font-weight: 800; letter-spacing: .04em; color: #8df0a0; }
+  #jobline { margin-top: 2px; font-size: 14px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: #ffd9a0; max-width: 430px; }
+  #objective { font-size: 14px; color: #fff; opacity: .92; max-width: 430px; }
+  #stars { top: 16px; right: 24px; font-size: 30px; letter-spacing: .18em; color: #3d3d46; }
+  #stars .lit { color: #ffd23e; }
+  #minimap { left: 22px; bottom: 22px; width: 176px; height: 176px; border-radius: 10px;
+    border: 2px solid rgba(255,255,255,.35); background: rgba(8,10,18,.55); }
+  #speedo { right: 26px; bottom: 24px; text-align: right; }
+  #speed { font-size: 40px; font-weight: 800; }
+  #speedo small { display: block; font-size: 11px; letter-spacing: .3em; opacity: .8; }
+  #healthwrap { right: 26px; bottom: 96px; width: 150px; height: 8px; border-radius: 4px;
+    background: rgba(255,255,255,.18); overflow: hidden; }
+  #health { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5d47, #ffb347); }
+  #banner { top: 24%; left: 0; right: 0; text-align: center; pointer-events: none;
+    font-size: 44px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase;
+    opacity: 0; transition: opacity .35s ease; color: #ffe9c4; }
+  #banner small { display: block; font-size: 16px; font-weight: 600; letter-spacing: .22em; color: #fff; }
+  #toast { top: 64px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700;
+    letter-spacing: .08em; opacity: 0; transition: opacity .3s ease; color: #aef3ff; }
+  #dialog { left: 50%; bottom: 34px; transform: translateX(-50%); width: min(680px, 86vw);
+    background: linear-gradient(180deg, rgba(12,8,16,.88), rgba(12,8,16,.78));
+    border-left: 4px solid #ffb347; border-radius: 6px; padding: 14px 20px 12px; display: none; }
+  #dialog .who { font-size: 13px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: #ffb347; }
+  #dialog .line { margin-top: 4px; font-size: 19px; line-height: 1.35; }
+  #dialog .hint { margin-top: 6px; font-size: 11px; letter-spacing: .18em; opacity: .55; text-transform: uppercase; }
+  #phonemenu { left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(430px, 88vw);
+    background: rgba(10,8,16,.92); border: 1px solid rgba(255,255,255,.22); border-radius: 14px;
+    padding: 22px 26px; display: none; z-index: 8; }
+  #phonemenu h3 { margin: 0 0 4px; font-size: 13px; letter-spacing: .3em; text-transform: uppercase; color: #aef3ff; }
+  #phonemenu .sub { font-size: 13px; opacity: .75; margin-bottom: 12px; }
+  #phonemenu button { display: block; width: 100%; margin: 8px 0; padding: 12px 14px; text-align: left;
+    font: 600 16px/1.2 inherit; color: #fff; background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.18); border-radius: 8px; cursor: pointer; }
+  #phonemenu button:hover { background: rgba(255,179,71,.25); }
+  #start { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; cursor: pointer;
+    background: linear-gradient(180deg, rgba(20,6,14,.18) 0%, rgba(20,6,14,.55) 78%, rgba(10,3,8,.85) 100%); }
+  #start .kicker { font-size: 15px; font-weight: 700; letter-spacing: .55em; text-transform: uppercase; color: #ffd9a0; }
+  #start h1 { margin: 6px 0 0; font-size: clamp(56px, 11vw, 118px); font-weight: 900; letter-spacing: .02em;
+    line-height: .95; color: #fff;
+    text-shadow: 0 4px 0 #ff7e3d, 0 10px 34px rgba(0,0,0,.6); }
+  #start h2 { margin: 4px 0 0; font-size: clamp(20px, 3.4vw, 34px); font-weight: 800;
+    letter-spacing: .42em; text-transform: uppercase; color: #7ee6f5; }
+  #start .pitch { margin-top: 26px; font-size: clamp(13px, 1.8vw, 18px); font-weight: 700;
+    letter-spacing: .3em; color: #ffe9c4; }
+  #start .go { margin-top: 40px; font-size: 15px; font-weight: 700; letter-spacing: .26em;
+    text-transform: uppercase; animation: pulse 1.6s ease-in-out infinite; }
+  #start .keys { margin-top: 14px; font-size: 12px; letter-spacing: .14em; opacity: .72; }
+  @keyframes pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+  #fader { position: fixed; inset: 0; background: #000; z-index: 9; pointer-events: none;
+    opacity: 0; transition: opacity .5s ease; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Costa Verde: a golden-hour open-world crime game"></canvas>
+<div id="scene"></div>
+<div id="grade"></div>
 
-<div id="hud">
+<div class="hud" id="cashbox">
   <div id="cash">$0</div>
-  <div id="carLabel"></div>
-  <div id="stars"></div>
+  <div id="jobline"></div>
   <div id="objective"></div>
-  <div id="raceInfo"></div>
-  <div id="banner"></div>
-  <canvas id="minimap" width="176" height="176"></canvas>
-  <div id="healthWrap"><div id="healthFill"></div></div>
-  <div id="bustLabel">BUSTED</div>
-  <div id="bustWrap"><div id="bustFill"></div></div>
-  <div id="prompt"></div>
-  <div id="dialogue"><div id="dlgWho"></div><div id="dlgText"></div><div id="dlgHint">E / click — continue</div></div>
 </div>
+<div class="hud" id="stars"></div>
+<canvas class="hud" id="minimap" width="176" height="176"></canvas>
+<div class="hud" id="healthwrap"><div id="health"></div></div>
+<div class="hud" id="speedo"><span id="speed">0</span><small>MPH</small></div>
+<div class="hud" id="banner"></div>
+<div class="hud" id="toast"></div>
+<div class="hud" id="dialog"><div class="who"></div><div class="line"></div><div class="hint">Enter ▸</div></div>
+<div class="hud" id="phonemenu"></div>
+<div id="fader"></div>
 
-<div id="title">
+<div id="start">
+  <div class="kicker">Welcome to</div>
   <h1>COSTA VERDE</h1>
-  <h2>SUNSET BOULEVARD</h2>
-  <div id="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
-  <button id="playBtn">▶ &nbsp;PLAY</button>
-  <div id="controls">
-    WASD move / drive · SHIFT sprint · MOUSE look · F enter car · SPACE handbrake<br>
-    CLICK / J fire · E talk &amp; interact · M mute · P pause
-  </div>
-  <div id="saveNote"></div>
+  <h2>Sunset Boulevard</h2>
+  <div class="pitch">SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY</div>
+  <div class="go">Click to roll</div>
+  <div class="keys">WASD drive · Space handbrake · Enter talk / confirm · M phone · P pause</div>
 </div>
-
-<div id="overlay"><div id="ovTitle"></div><div id="ovSub"></div></div>
 
 <script src="./vendor/three.min.js"></script>
 <script type="module" src="./src/main.js"></script>
