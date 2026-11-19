@@ -1,49 +1,52 @@
 # Costa Verde — Sunset Boulevard
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![make.fun bounty](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
+[![make.fun rank](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01)
+[![make.fun reward](https://make.fun/badge/gta6-01/acengrahmi/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01)
 
-**SEVEN JOBS · ONE SUNSET · EVERY COP IN THE CITY**
+A golden-hour open-world crime game that runs entirely in the browser. One
+sunset, one coastal city, seven jobs — and every cop in the city.
 
-Costa Verde is a golden-hour open-world crime game that runs entirely in the
-browser. You arrive in a palm-lined coastal city at sunset with nothing but a
-pistol and a phone full of questionable contacts. Work seven story jobs for
-Lena Cruz, Sal Bianchi, Mateo Reyes and Officer Dana Ruiz — steal a Comet GT,
-run the marina, settle a score with the Vipers, pull the Big Score and survive
-the Sunset Showdown — while a five-star wanted system sends cruisers, foot
-cops and a searchlight helicopter after you. Between jobs, run the Sunset GP
-checkpoint race down the hero boulevard or pick up taxi fares along the
-boardwalk. Every sound is synthesized live with WebAudio; the whole city is
-procedural three.js — no downloads, no assets, no server.
+## The game
 
-## Controls
+You arrive in Costa Verde with a borrowed car and a phone full of other
+people's problems. Work your way up the ladder: run an errand for Lena Cruz,
+steal a Comet GT for Sal Bianchi, race the Marina Run for Mateo Reyes, settle
+a score with the Vipers, feed information to Officer Dana Ruiz, pull the Big
+Score against the clock, and face the Sunset Showdown as the light dies.
 
-- **W A S D** — move / drive · **Shift** — sprint · **Mouse** — look (click the game to lock the pointer)
-- **F** — enter / exit a car · **Space** — handbrake · **Left mouse / J** — fire pistol
-- **E** — talk / interact · **M** — mute · **P** — pause
+- **A living city** — a 9×9 grid of towers and palms at golden hour, with a
+  working seafront: boardwalk, three piers, beach umbrellas and sailboats
+  riding the swell.
+- **Real traffic** — civilian cars cruise the grid, brake for trouble and
+  scatter when the shooting starts.
+- **A wanted system that escalates** — cruisers first, then foot cops, then a
+  searchlight helicopter that pins you in its beam. Get surrounded and you're
+  BUSTED; wreck the car and you're WASTED. Either way you wake up at the
+  hospital with lighter pockets.
+- **Side money** — the Sunset GP street race against three rivals, and taxi
+  fares for anyone with somewhere to be.
+- **Synth soundtrack** — engine, sirens and a sunset groove, all generated
+  live with WebAudio. No audio files, no network, no build step.
 
-## How to run
+## Play it
 
-Serve the `game/` folder with any static file server and open `index.html`:
+Open `game/index.html` in a desktop browser, or serve the folder:
 
 ```
-node serve.ts        # or: python3 -m http.server -d game 8080
+node serve.ts        # then visit http://localhost:8080
 ```
 
-Then open http://localhost:8080 in a desktop browser. Progress (cash, jobs
-done, position) is saved to localStorage automatically.
+Drive with WASD or the arrow keys, brake/reverse with S, handbrake with
+Space. Enter and M answer the phone and advance conversations.
 
-## What's in the city
+## Layout
 
-- A 9×9 street grid of 107 buildings in three architectural styles with neon
-  billboards, wrapped around a wide palm-lined hero boulevard
-- A working waterfront: sun-glitter sea, boardwalk, three piers, sixteen
-  beach umbrellas and seven sailboats under a low golden sun
-- 20 traffic cars and 44 pedestrians going about their evening
-- A 0–5 star wanted system: cruisers, foot cops and a searchlight helicopter;
-  get caught and you're BUSTED, get flatlined and you're WASTED
-- Seven story jobs with dialogue, plus the Sunset GP checkpoint race and
-  taxi fares between jobs
+- `main.ts` — the entrypoint: validates the entry, copies `game/` and
+  `screenshots/` to the output directory and writes the dossier.
+- `game/` — the game itself: `index.html` plus one ES module,
+  `src/main.js`, with three.js r149 vendored under `game/vendor/`.
+- `screenshots/` — the four dossier stills: the chase, the story, the
+  vista, the start screen.
 
 Entered on make.fun — see the bounty: https://make.fun/bounty/gta6-01
